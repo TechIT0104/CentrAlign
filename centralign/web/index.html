@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CentrAlign Operator</title>
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--ink:#17191c;--mute:#667085;--line:#e4e7ec;--accent:#2457d6;--ok:#12805c;--warn:#b25e09;--bad:#c4321c;--okbg:#e6f6ef;--warnbg:#fff4e0;--badbg:#fdeceb;--code:#f0f2f5}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--card:#171a20;--ink:#e8eaee;--mute:#98a2b3;--line:#2a2f38;--accent:#7aa2ff;--ok:#4cc79a;--warn:#f0b35a;--bad:#ff8a78;--okbg:#10291f;--warnbg:#2d2210;--badbg:#341a17;--code:#20242c}}
+*{box-sizing:border-box}body{margin:0;font:14px/1.5 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--ink)}
+header{display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid var(--line);background:var(--card)}
+header h1{font-size:16px;margin:0}.badge{font-size:12px;padding:2px 8px;border-radius:99px;background:var(--code);color:var(--mute)}
+.layout{display:grid;grid-template-columns:320px 1fr;gap:16px;padding:16px 20px;max-width:1300px;margin:0 auto}
+@media(max-width:860px){.layout{grid-template-columns:1fr;padding:12px 16px}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:14px}
+h2{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);margin:0 0 10px}
+textarea,input[type=text]{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit}
+textarea{min-height:76px;resize:vertical}
+button{font:inherit;padding:7px 14px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}button.ok{background:var(--ok);border-color:var(--ok);color:#fff}button.bad{color:var(--bad);border-color:var(--bad)}
+button:disabled{opacity:.5;cursor:default}.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center}
+.chip{font-size:12px;padding:3px 9px;border:1px solid var(--line);border-radius:99px;background:var(--bg);cursor:pointer;color:var(--mute)}
+.chip:hover{color:var(--ink)}
+.run{padding:8px 10px;border-radius:8px;cursor:pointer;border:1px solid transparent}.run:hover{background:var(--bg)}.run.sel{border-color:var(--accent);background:var(--bg)}
+.run small{display:block;color:var(--mute)}
+.pill{font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;text-transform:uppercase;letter-spacing:.03em}
+.pill.completed{background:var(--okbg);color:var(--ok)}.pill.running{background:var(--code);color:var(--accent)}
+.pill.waiting_approval,.pill.waiting_human,.pill.completed_with_issues{background:var(--warnbg);color:var(--warn)}.pill.failed,.pill.cancelled{background:var(--badbg);color:var(--bad)}
+.need{border-color:var(--warn);background:var(--warnbg)}.need h2{color:var(--warn)}
+.steps{list-style:none;margin:0;padding:0}.steps li{padding:5px 0;display:flex;gap:10px;color:var(--mute)}.steps li.cur{color:var(--ink);font-weight:600}.steps li.done{color:var(--ok)}
+.ev{display:grid;grid-template-columns:18px 1fr;gap:6px;padding:4px 0;border-bottom:1px dashed var(--line);font-size:13px}
+.ev code{background:var(--code);padding:1px 5px;border-radius:4px;font-size:12px}.ev .m{color:var(--mute)}
+.ev.step{font-weight:600;margin-top:8px;border-bottom:none}.ev.err{color:var(--bad)}.ev.warn{color:var(--warn)}.ev.good{color:var(--ok)}
+table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top;font-size:13px}
+.gal{display:flex;gap:10px;flex-wrap:wrap}.gal img{width:150px;border:1px solid var(--line);border-radius:6px;cursor:zoom-in}
+#modal{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center;padding:20px}#modal img{max-width:96%;max-height:96%;border-radius:8px}
+.empty{color:var(--mute);padding:30px;text-align:center}
+</style>
+</head>
+<body>
+<header><h1>CentrAlign Operator</h1><span class="badge" id="brain"></span><span class="badge">Goal → Plan → Execute → Observe → Adapt → Verify</span></header>
+<div class="layout">
+  <aside>
+    <div class="card">
+      <h2>New task</h2>
+      <textarea id="goal" placeholder="Describe the outcome you want, e.g. Onboard Priya Sharma into Engineering, starting Monday"></textarea>
+      <div class="row"><button class="primary" id="go">Run</button></div>
+      <div class="row" id="examples"></div>
+    </div>
+    <div class="card"><h2>Runs</h2><div id="runs"></div></div>
+    <div class="card">
+      <h2>Demo environment</h2>
+      <div class="row" id="chaos"></div>
+      <div class="row"><button id="reset">Reset company data</button></div>
+      <p class="m" style="color:var(--mute);font-size:12px;margin:8px 0 0">Injects failures into the mock HR app so you can watch recovery.</p>
+    </div>
+    <div class="card">
+      <h2>Teach the operator</h2>
+      <input type="text" id="rule" placeholder="A standing rule, e.g. Always cc the manager">
+      <div class="row"><button id="addrule">Save rule</button></div>
+      <ul id="rules" style="padding-left:18px;margin:8px 0 0;color:var(--mute);font-size:12px"></ul>
+    </div>
+  </aside>
+  <main id="main"><div class="card empty">Start a task, or pick a run.</div></main>
+</div>
+<div id="modal" onclick="this.style.display='none'"><img id="modalimg"></div>
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const api=(p,o)=>fetch(p,o&&{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(o)}).then(r=>r.ok?r.json():r.json().then(e=>{throw new Error(e.detail||r.status)}));
+let cur=null,after=0,evs=[],state=null,chaos=new Set();
+const EXAMPLES=['Onboard Priya Sharma into Engineering, starting 2026-11-02','Onboard Rahul Verma into Sales, starting 2026-11-02','Onboard Dana Kim into Engineering with admin access, starting 2026-11-02','Offboard Sam Okafor','Onboard Dana Lee'];
+$('#examples').innerHTML=EXAMPLES.map((e,i)=>`<span class="chip" data-i="${i}">${esc(e.length>34?e.slice(0,32)+'…':e)}</span>`).join('');
+$('#examples').onclick=e=>{const i=e.target.dataset.i;if(i!=null)$('#goal').value=EXAMPLES[i]};
+['flaky','rename','expiry','slow'].forEach(c=>{const b=document.createElement('span');b.className='chip';b.textContent=c;b.onclick=()=>{chaos.has(c)?chaos.delete(c):chaos.add(c);b.style.cssText=chaos.has(c)?'background:var(--warnbg);color:var(--warn)':''};$('#chaos').append(b)});
+$('#reset').onclick=async()=>{await api('/api/demo/reset',{chaos:[...chaos].join(',')});$('#reset').textContent='Reset ✓';setTimeout(()=>$('#reset').textContent='Reset company data',1200)};
+$('#go').onclick=async()=>{const g=$('#goal').value.trim();if(!g)return;const r=await api('/api/runs',{goal:g});select(r.run_id);loadRuns()};
+$('#addrule').onclick=async()=>{const t=$('#rule').value.trim();if(!t)return;await api('/api/feedback',{text:t});$('#rule').value='';info()};
+async function info(){const i=await api('/api/info');$('#brain').textContent='brain: '+i.brain+(i.model?' · '+i.model:'');$('#rules').innerHTML=i.feedback.slice(0,6).map(f=>`<li>${esc(f)}</li>`).join('')}
+async function loadRuns(){const rs=await api('/api/runs');$('#runs').innerHTML=rs.map(r=>`<div class="run ${r.id===cur?'sel':''}" data-id="${r.id}"><span class="pill ${r.status}">${r.status.replace(/_/g,' ')}</span><small>${esc(r.goal.slice(0,70))}</small></div>`).join('')||'<div class="empty">No runs yet</div>'}
+$('#runs').onclick=e=>{const d=e.target.closest('.run');if(d)select(d.dataset.id)};
+function select(id){cur=id;after=0;evs=[];state=null;$('#main').innerHTML='<div class="card empty">Loading…</div>';tick()}
+function line(e){const d=e.data,t=e.type;
+ switch(t){
+ case'run.created':return['▶',`Task received <span class="m">(brain: ${esc(d.brain)})</span>`];
+ case'memory.recalled':return['🧠',`Recalled company knowledge: ${esc(d.docs.join(', ')||'none')}${d.rules.length?`; ${d.rules.length} learned rule(s)`:''}`];
+ case'plan.created':case'plan.revised':return['🗺',`${t==='plan.created'?'Plan':'Revised plan'}: ${esc(d.plan.understanding)}`];
+ case'plan.replanning':return['↻',`<span class="warn">Replanning: ${esc(d.reason.slice(0,160))}</span>`,'warn'];
+ case'step.started':return['',`${d.index}/${d.of} · ${esc(d.description)}`,'step'];
+ case'policy.decision':return d.verdict==='auto'?null:['🛡',`Policy <b>${d.verdict.toUpperCase()}</b> (${esc(d.rule)}): ${esc(d.preview||'')}`,d.verdict==='deny'?'err':'warn'];
+ case'action.executed':{const a=Object.entries(d.args).filter(([k])=>!['content','body'].includes(k)).map(([k,v])=>`${k}=${esc((typeof v==='object'?JSON.stringify(v):String(v)).slice(0,40))}`).join(' ');
+  return[d.ok?'✓':'✗',`<code>${esc(d.tool)}</code> <span class="m">${a}</span> ${d.retries?`<span class="warn">(retried ${d.retries}×)</span>`:''} <span class="m">${esc((d.error||d.summary||'').slice(0,70))}</span>`,d.ok?'':'err']}
+ case'anomaly':return['⚠',`Observed: ${esc(d.note)}`,'warn'];
+ case'step.completed':return['✔',`${esc(d.summary)}${d.skipped?' <span class="warn">(skipped)</span>':''}`,'good'];
+ case'step.failed':return['✖',`Step failed: ${esc(d.reason)}`,'err'];
+ case'intervention.requested':return['✋',`Needs a human: ${esc(d.question||d.preview)}`,'warn'];
+ case'approval.granted':return['👍',`Approved: ${esc(d.preview)}`,'good'];
+ case'approval.denied':return['👎',`Declined: ${esc(d.preview)} ${esc(d.note||'')}`,'err'];
+ case'verify.started':return['🔎',`Verifying ${d.checks} acceptance checks independently`,'step'];
+ case'check.result':return[d.status==='passed'?'✔':d.status==='skipped'?'–':'✖',`${esc(d.description)} <span class="m">${esc(d.detail.slice(0,90))}</span>`,d.status==='passed'?'good':d.status==='skipped'?'warn':'err'];
+ case'lesson.saved':return['💡',`Learned: ${esc(d.lesson)}`];
+ case'run.finished':return['■',`<b>${esc(d.status.replace(/_/g,' '))}</b>: ${esc(d.summary)}`,d.status==='completed'?'good':'err'];
+ case'run.error':return['✖',esc(d.error),'err'];
+ }return null}
+function render(){const s=state;if(!s)return;const evHtml=evs.map(e=>{const l=line(e);return l?`<div class="ev ${l[2]||''}"><span>${l[0]}</span><span>${l[1]}</span></div>`:''}).join('');
+ const pend=s.pending.map(p=>p.kind==='approval'?
+  `<div class="card need"><h2>Approval needed</h2><b>${esc(p.payload.preview)}</b><p class="m" style="margin:4px 0">${esc(p.payload.reason)} <i>(rule: ${esc(p.payload.rule)})</i></p>
+   <input type="text" id="note${p.id}" placeholder="Optional note. If you decline, this becomes a standing rule."><div class="row"><button class="ok" onclick="decide(${p.id},true)">Approve</button><button class="bad" onclick="decide(${p.id},false)">Decline</button></div></div>`:
+  `<div class="card need"><h2>Question for you</h2><b>${esc(p.payload.question)}</b><div class="row" style="flex-wrap:nowrap"><input type="text" id="ans${p.id}" placeholder="Your answer"><button class="primary" onclick="answer(${p.id})">Send</button></div></div>`).join('');
+ const plan=s.plan?`<div class="card"><h2>Plan</h2><p style="margin:0 0 8px">${esc(s.plan.understanding)}</p><ul class="steps">${s.plan.steps.map((st,i)=>`<li class="${i<s.step_idx||s.phase==='verifying'||s.phase==='finished'&&s.status==='completed'?'done':i===s.step_idx&&s.phase==='executing'?'cur':''}"><span>${i<s.step_idx||s.phase==='verifying'||s.phase==='finished'&&s.status==='completed'?'✔':i+1}</span>${esc(st.description)}</li>`).join('')}</ul>${s.plan.assumptions.length?`<p class="m" style="color:var(--mute);margin:8px 0 0;font-size:12px">Assumptions: ${s.plan.assumptions.map(esc).join(' · ')}</p>`:''}</div>`:'';
+ const checks=s.checks.length?`<div class="card"><h2>Acceptance checks <span style="text-transform:none;letter-spacing:0">(verified independently of the agent)</span></h2><table>${s.checks.map(c=>`<tr><td><span class="pill ${c.status==='passed'?'completed':c.status==='skipped'?'waiting_human':'failed'}">${c.status}</span></td><td>${esc(c.description)}<br><span style="color:var(--mute);font-size:12px">${esc(c.detail)}</span></td></tr>`).join('')}</table></div>`:'';
+ const shots=evs.filter(e=>e.type==='action.executed').flatMap(e=>e.data.artifacts||[]);
+ const gal=shots.length?`<div class="card"><h2>Evidence (${shots.length} screenshots)</h2><div class="gal">${shots.map(p=>`<img loading="lazy" src="/api/runs/${cur}/evidence/${p}" onclick="zoom(this.src)">`).join('')}</div></div>`:'';
+ const keep=$('#tl')?$('#tl').scrollTop:0;
+ $('#main').innerHTML=`<div class="card"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="pill ${s.status}">${s.status.replace(/_/g,' ')}</span><b>${esc(s.goal)}</b>${['running','waiting_approval','waiting_human'].includes(s.status)?`<button class="bad" style="margin-left:auto" onclick="api('/api/runs/${cur}/cancel',{})">Cancel</button>`:''}</div>${s.summary?`<p style="margin:8px 0 0">${esc(s.summary)}</p>`:''}${s.status!=='running'&&s.phase==='finished'?`<p style="margin:6px 0 0;font-size:12px;color:var(--mute)">Full evidence report: <code>.centralign/runs/${cur}/report.md</code></p>`:''}</div>${pend}${plan}<div class="card"><h2>Live trace</h2><div id="tl">${evHtml}</div></div>${checks}${gal}`;
+}
+window.decide=async(id,ok)=>{await api('/api/interventions/'+id,{approved:ok,note:($('#note'+id)||{}).value||''});tick()};
+window.answer=async id=>{const v=$('#ans'+id).value.trim();if(!v)return;await api('/api/interventions/'+id,{answer:v});tick()};
+window.zoom=src=>{$('#modalimg').src=src;$('#modal').style.display='flex'};
+let busy=false;
+async function tick(){if(!cur||busy)return;busy=true;try{const id=cur;const [s,e]=await Promise.all([api('/api/runs/'+id),api(`/api/runs/${id}/events?after=${after}`)]);if(id!==cur)return;
+ if(e.length){evs=evs.concat(e);after=e[e.length-1].seq}const sig=JSON.stringify([s.status,s.step_idx,s.pending.map(p=>p.id),e.length,s.checks.length]);
+ if(!state||sig!==state._sig||e.length){state=s;state._sig=sig;const typing=document.activeElement&&document.activeElement.tagName==='INPUT'&&document.activeElement.closest('#main');if(!typing)render()}}catch(err){console.error(err)}finally{busy=false}}
+setInterval(tick,900);setInterval(loadRuns,2500);info();loadRuns();
+</script>
+</body>
+</html>
