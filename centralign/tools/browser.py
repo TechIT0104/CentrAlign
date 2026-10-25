@@ -311,7 +311,15 @@ class Select(_BrowserTool):
     risk = "write"
 
     def preview(self, args, ctx):
-        return {"text": f"select {args.get('value')} in element {args.get('target')}"}
+        sess = self._sess(ctx)
+
+        def d(page):
+            try:
+                return {"text": f"{_locate(page, args['target']).evaluate(DESCRIBE_JS)} <- {args.get('value')}"}
+            except Exception:
+                return {"text": f"select {args.get('value')} in element {args.get('target')}"}
+
+        return sess.call(d)
 
     def run(self, args, ctx):
         sess = self._sess(ctx)

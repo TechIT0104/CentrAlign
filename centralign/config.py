@@ -18,7 +18,7 @@ class Settings:
     brain: str = "auto"  # auto | claude | scripted
     acmehr_url: str = "http://127.0.0.1:8765"
     acmehr_api_key: str = "verifier-readonly-key"
-    max_actions_per_step: int = 14
+    max_actions_per_step: int = 30
     max_replans: int = 2
     max_verify_rounds: int = 2
     max_tool_retries: int = 2

@@ -186,7 +186,7 @@ class Runtime:
             new = self.brain.plan(req)
         except BrainUnsupported as e:
             return self._finish(run_id, state, rec, "failed", str(e))
-        done_kinds = {s.kind for s in state.plan.steps if s.kind and any(r.step_id == s.id and r.status != "failed" for r in state.step_results)}
+        done_kinds = {r.kind for r in state.step_results if r.kind and r.status != "failed"}
         new.steps = [s.model_copy(update={"id": f"r{state.replans}-{s.id}"}) for s in new.steps if not (s.kind and s.kind in done_kinds)]
         state.plan, state.step_idx, state.history = new, 0, []
         state.phase = "executing" if new.steps else "verifying"
@@ -213,7 +213,7 @@ class Runtime:
             step_results=list(state.step_results), guidance=list(state.guidance), memory_text=Memory.render(mem),
             tool_specs=self.registry.specs()))
         if decision.kind == "done":
-            state.step_results.append(StepResult(step_id=step.id, status="skipped" if decision.skipped else "done",
+            state.step_results.append(StepResult(step_id=step.id, kind=step.kind, status="skipped" if decision.skipped else "done",
                                                  summary=decision.summary, facts=decision.facts, actions=len(state.history)))
             rec("step.completed", step=step.id, summary=decision.summary, skipped=decision.skipped, actions=len(state.history))
             state.step_idx, state.history = state.step_idx + 1, []
@@ -249,7 +249,7 @@ class Runtime:
             state.pending_intervention, state.status = iid, "waiting_human"
             rec("intervention.requested", id=iid, kind="question", question=q, why="automatic recovery exhausted; escalating")
             return
-        state.step_results.append(StepResult(step_id=step.id, status="failed", summary=reason, actions=len(state.history)))
+        state.step_results.append(StepResult(step_id=step.id, kind=step.kind, status="failed", summary=reason, actions=len(state.history)))
         self._finish(run_id, state, rec, "failed", f"Could not complete step '{step.description}': {reason}")
 
     # --------------------------------------------------------------- actions

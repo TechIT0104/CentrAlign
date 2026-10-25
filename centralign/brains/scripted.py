@@ -307,7 +307,10 @@ class ScriptedBrain(Brain):
         dept_list = [d.strip() for d in depts.split(",")] if depts else []
         dept = ans.get("department") or next((d for d in dept_list if d.lower() in goal.lower()), None)
         start = self._parse_date(goal) or self._parse_date(ans.get("start_date", ""))
-        access = next((a for a in ("admin", "finance") if re.search(rf"\b{a}\b", goal.lower())), "standard")
+        # Only an explicit access request counts; "into Finance" names a department, not a privilege.
+        access = next((a for a in ("admin", "finance") if re.search(
+            rf"\b{a}\s+(?:access|rights|privileges|permissions|role)\b|\baccess\s+(?:level\s+)?(?:of\s+|as\s+|to\s+)?{a}\b",
+            goal.lower())), "standard")
         missing = []
         if not dept:
             missing.append(MissingInfo(key="department", question=f"Which department is {name} joining? ({', '.join(dept_list)})"))

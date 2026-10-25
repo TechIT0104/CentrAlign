@@ -33,7 +33,7 @@ rules:
     reason: "Email cannot be unsent; a human approves every outgoing message."
 
   - id: elevated-access
-    when: { tool: "browser.select", args_match: { value: "(?i)admin|finance" } }
+    when: { tool: "browser.select", preview_match: "(?i)access", args_match: { value: "(?i)^(admin|finance)$" } }
     action: approve
     reason: "Admin or finance access is privileged and needs explicit human approval."
 

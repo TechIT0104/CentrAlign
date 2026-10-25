@@ -90,6 +90,7 @@ class Decision(BaseModel):
 
 class StepResult(BaseModel):
     step_id: str
+    kind: str = ""
     status: Literal["done", "skipped", "failed"]
     summary: str
     facts: dict[str, Any] = Field(default_factory=dict)
