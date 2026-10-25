@@ -1,0 +1,6 @@
+name,email,department,start_date,status
+Anita Rao,anita.rao@acme.test,Engineering,2023-02-01,active
+Meera Iyer,meera.iyer@acme.test,Finance,2022-07-15,active
+Sam Okafor,sam.okafor@acme.test,Design,2024-01-08,active
+Rahul Verma,rahul.verma@acme.test,Sales,2021-05-03,inactive
+Leila Haddad,leila.haddad@acme.test,Engineering,2025-03-10,active

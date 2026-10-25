@@ -1,0 +1,43 @@
+# Company action policy. First matching rule wins; otherwise `default` by tool risk tier.
+# auto = run now | approve = pause for a human | deny = never allowed
+default:
+  read: auto
+  write: auto
+  external: approve
+  destructive: deny
+
+rules:
+  - id: only-internal-hosts
+    when: { tool: "browser.goto", host_not_in: ["127.0.0.1", "localhost"] }
+    action: deny
+    reason: "Browsing is limited to approved internal systems."
+
+  - id: only-internal-http
+    when: { tool: "http.request", host_not_in: ["127.0.0.1", "localhost"] }
+    action: deny
+    reason: "API calls are limited to approved internal systems."
+
+  - id: http-reads-ok
+    when: { tool: "http.request", args_match: { method: "(?i)^GET$" } }
+    action: auto
+    reason: "Read-only API calls are safe."
+
+  - id: http-writes-need-approval
+    when: { tool: "http.request" }
+    action: approve
+    reason: "Mutating API calls must be approved; use the UI workflow in the SOP instead."
+
+  - id: outbound-email
+    when: { tool: "email.send" }
+    action: approve
+    reason: "Email cannot be unsent; a human approves every outgoing message."
+
+  - id: elevated-access
+    when: { tool: "browser.select", args_match: { value: "(?i)admin|finance" } }
+    action: approve
+    reason: "Admin or finance access is privileged and needs explicit human approval."
+
+  - id: deactivate-account
+    when: { tool: "browser.click", preview_match: "(?i)deactivate" }
+    action: approve
+    reason: "Deactivating an account revokes all access and needs human approval."
