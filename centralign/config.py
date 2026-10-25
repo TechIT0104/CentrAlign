@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parent.parent
 class Settings:
     home: Path = field(default_factory=lambda: ROOT / ".centralign")
     company_dir: Path = field(default_factory=lambda: ROOT / "demo_company")
-    model: str = "claude-sonnet-5-5"
+    model: str = "claude-opus-5-5"
     brain: str = "auto"  # auto | claude | scripted
     acmehr_url: str = "http://127.0.0.1:8765"
     acmehr_api_key: str = "verifier-readonly-key"

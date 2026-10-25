@@ -26,6 +26,7 @@ class Step(BaseModel):
     description: str
     expected: str = ""
     kind: str = ""  # optional hint, used by the offline brain
+    params: dict[str, Any] = Field(default_factory=dict)
 
 
 class MissingInfo(BaseModel):
@@ -118,7 +119,9 @@ class RunState(BaseModel):
     history: list[HistoryItem] = Field(default_factory=list)  # current step only
     step_results: list[StepResult] = Field(default_factory=list)
     replans: int = 0
+    escalations: int = 0
     verify_rounds: int = 0
+    started_step: str = ""
     guidance: list[str] = Field(default_factory=list)  # human answers/feedback applied to later reasoning
     answers: dict[str, str] = Field(default_factory=dict)  # missing_info key -> answer
     pending_intervention: int | None = None

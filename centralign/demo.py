@@ -1,0 +1,83 @@
+"""Helpers to run the bundled demo company: start AcmeHR, reset data, inject failures."""
+from __future__ import annotations
+
+import os
+import shutil
+import subprocess
+import sys
+import time
+from urllib.parse import urlparse
+
+import httpx
+
+from .config import ROOT, Settings
+
+CHAOS_PRESETS = {
+    "flaky": {"flaky_create": 1},  # first save returns HTTP 500
+    "rename": {"rename_button": True},  # submit button label changes
+    "expiry": {"session_expiry_after": 5},  # session dies mid-task
+    "slow": {"slow_create": 2.0},  # sluggish save
+}
+
+
+def chaos_from_names(names: str) -> dict:
+    out: dict = {}
+    for n in (x.strip() for x in names.split(",") if x.strip()):
+        if n == "all":
+            for k in ("flaky", "rename", "expiry"):
+                out.update(CHAOS_PRESETS[k])
+        elif n in CHAOS_PRESETS:
+            out.update(CHAOS_PRESETS[n])
+        else:
+            raise SystemExit(f"unknown chaos preset {n!r}; choose from {', '.join(CHAOS_PRESETS)}, all")
+    return out
+
+
+def reset_files(s: Settings) -> None:
+    """Restore the company drive to its seed state."""
+    if s.files_dir.exists():
+        shutil.rmtree(s.files_dir)
+    shutil.copytree(s.company_dir / "files_seed", s.files_dir)
+
+
+def acmehr_up(s: Settings) -> bool:
+    try:
+        return httpx.get(f"{s.acmehr_url}/__admin/health", timeout=1.5).status_code == 200
+    except httpx.HTTPError:
+        return False
+
+
+def start_acmehr(s: Settings) -> subprocess.Popen | None:
+    """Start the mock HR app if it is not already running. Returns the process we started (if any)."""
+    if acmehr_up(s):
+        return None
+    port = urlparse(s.acmehr_url).port or 8765
+    env = {**os.environ, "ACMEHR_DB": str(s.home / "acmehr.db")}
+    s.home.mkdir(parents=True, exist_ok=True)
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "uvicorn", "demo_company.acmehr.app:app", "--port", str(port), "--log-level", "warning"],
+        cwd=str(ROOT), env=env,
+    )
+    for _ in range(50):
+        if acmehr_up(s):
+            return proc
+        time.sleep(0.2)
+    proc.terminate()
+    raise RuntimeError("AcmeHR failed to start")
+
+
+def reset_acmehr(s: Settings, chaos: dict | None = None) -> None:
+    httpx.post(f"{s.acmehr_url}/__admin/reset", timeout=5)
+    if chaos:
+        httpx.post(f"{s.acmehr_url}/__admin/chaos", json=chaos, timeout=5)
+
+
+def prepare_demo(s: Settings, chaos: dict | None = None, fresh: bool = True) -> subprocess.Popen | None:
+    s.ensure_dirs()
+    proc = start_acmehr(s)
+    if fresh:
+        reset_files(s)
+        reset_acmehr(s, chaos)
+    elif chaos:
+        httpx.post(f"{s.acmehr_url}/__admin/chaos", json=chaos, timeout=5)
+    return proc
