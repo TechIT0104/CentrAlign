@@ -304,18 +304,30 @@ class ScriptedBrain(Brain):
         )
 
     @staticmethod
-    def _name_or_ask(found: str | None, answers: dict[str, str], who: str, min_words: int) -> tuple[str | None, MissingInfo | None]:
-        """Use the name from the request, else from a human's answer. Only ask again (once, with a clearer
-        question) if the answer is unusable, so an answered question can never leave the plan empty."""
+    def _name_or_ask(found: str | None, answers: dict[str, str], who: str, min_words: int,
+                     first: str | None = None) -> tuple[str | None, MissingInfo | None]:
+        """Use the name from the request, else from a human's answer. If only a first name was given and the
+        answer is a single word, it is the surname. Only ask again (once, with a clearer question) if the
+        answer is still unusable, so an answered question can never leave the plan empty."""
         if found:
             return found, None
         for key in ("name", "full_name"):
             given = " ".join(answers.get(key, "").split())
             if len(given.split()) >= min_words:
                 return given, None
-        if "name" in answers:  # answered, but too short: say exactly what is needed
+            if first and min_words == 2 and len(given.split()) == 1 and given.lower() != first.lower():
+                return f"{first} {given.capitalize() if given.islower() else given}", None
+        if "name" in answers:  # answered, but unusable: say exactly what is needed
             return None, MissingInfo(key="full_name", question=f"I need {who}'s first and last name (for example 'Priya Sharma'). What is it?")
+        if first:
+            return None, MissingInfo(key="name", question=f"What is {first}'s last name?")
         return None, MissingInfo(key="name", question=f"What is {who}'s full name?")
+
+    @staticmethod
+    def _first_name(goal: str, verbs: str) -> str | None:
+        """A lone capitalised word after the verb ('Onboard Priya into Design'): a first name without a surname."""
+        m = re.search(rf"(?i:{verbs})\s+(?:(?i:new hire|employee)\s+)?([A-Z][a-zA-Z'-]+)\b", goal)
+        return m.group(1) if m else None
 
     def _name(self, goal: str, verbs: str) -> str | None:
         m = re.search(rf"(?i:{verbs})\s+(?:(?i:new hire|employee)\s+)?([A-Z][a-zA-Z'-]+(?:\s+[A-Z][a-zA-Z'-]+){{1,2}})", goal)
@@ -323,7 +335,8 @@ class ScriptedBrain(Brain):
 
     def _plan_onboard(self, req: PlanRequest) -> Plan:
         goal, ans = req.goal, req.answers
-        name, ask = self._name_or_ask(self._name(goal, "onboard|hire|welcome|add"), ans, "the new hire", 2)
+        name, ask = self._name_or_ask(self._name(goal, "onboard|hire|welcome|add"), ans, "the new hire", 2,
+                                    self._first_name(goal, "onboard|hire|welcome|add"))
         sources = [c.ref for c in req.memory["docs"]][:4]
         if not name:
             return Plan(understanding="Onboard a new hire, but no usable name was found.", missing_info=[ask], sources=sources)

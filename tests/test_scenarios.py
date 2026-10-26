@@ -261,15 +261,21 @@ def test_first_name_only_asks_for_the_full_name_and_then_uses_the_answer(rt, fre
     state, rid = run(rt, "Onboard Priya into Engineering, starting 2026-11-02", answers=["Priya Sharma"])
     assert state.status == "completed", state.summary
     qs = [d["question"] for d in events(rt, rid, "intervention.requested") if d["kind"] == "question"]
-    assert qs == ["What is the new hire's full name?"]
+    assert qs == ["What is Priya's last name?"]
     assert hr(fresh, "priya.sharma@acme.test")[0]["department"] == "Engineering"
 
 
 def test_an_unusable_name_answer_gets_one_clearer_follow_up_then_a_clear_failure(rt, fresh):
-    state, rid = run(rt, "Onboard Priya into Engineering, starting 2026-11-02", answers=["Priya", "Priya Sharma"])
+    state, rid = run(rt, "Onboard Priya into Engineering, starting 2026-11-02", answers=["", "Priya Sharma"])
     assert state.status == "completed"
     qs = [d["question"] for d in events(rt, rid, "intervention.requested") if d["kind"] == "question"]
     assert len(qs) == 2 and "first and last name" in qs[1]
     state, rid = run(rt, "Onboard Priya into Engineering, starting 2026-11-02", answers=["Priya", "Priya"])
     assert state.status == "failed" and "could not use the answer" in state.summary
     assert len(hr(fresh, q="priya")) == 1  # only the first run's Priya Sharma; the failed one created nothing
+
+
+def test_a_lone_surname_is_combined_with_the_first_name_from_the_request(rt, fresh):
+    state, rid = run(rt, "Onboard Priya into Engineering, starting 2026-11-02", answers=["kk"])
+    assert state.status == "completed", state.summary
+    assert hr(fresh, "priya.kk@acme.test")[0]["full_name"] == "Priya Kk"
