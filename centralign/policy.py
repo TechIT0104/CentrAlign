@@ -31,7 +31,11 @@ class Policy:
     def __init__(self, config: dict[str, Any]):
         self.defaults: dict[str, str] = config.get("default", {})
         self.rules: list[dict[str, Any]] = config.get("rules", [])
-        for r in self.rules:
+        # Effect-level rules: matched against the HTTP requests a browser action actually sends, so a
+        # relabelled button cannot slip past a rule written against its text.
+        self.request_rules: list[dict[str, Any]] = config.get("request_rules", [])
+        self.request_default: str = config.get("request_default", "auto")
+        for r in [*self.rules, *self.request_rules]:
             if r.get("action") not in VERDICTS:
                 raise ValueError(f"policy rule {r.get('id')} has invalid action {r.get('action')!r}")
 
@@ -46,6 +50,19 @@ class Policy:
                 return Verdict(rule["action"], rule["id"], rule.get("reason", ""))
         default = self.defaults.get(risk, "approve")  # unknown risk => fail safe
         return Verdict(default, f"default:{risk}", f"default policy for '{risk}' actions")
+
+    def decide_request(self, method: str, url: str) -> Verdict:
+        host = urlparse(url).hostname or ""
+        for rule in self.request_rules:
+            w = rule.get("when", {})
+            if "method" in w and not re.fullmatch(w["method"], method, re.I):
+                continue
+            if "url_match" in w and not re.search(w["url_match"], url):
+                continue
+            if "host_not_in" in w and host in w["host_not_in"]:
+                continue
+            return Verdict(rule["action"], rule["id"], rule.get("reason", ""))
+        return Verdict(self.request_default, "default:request", "default policy for outgoing requests")
 
     @staticmethod
     def _matches(when: dict[str, Any], action: Action, preview: dict[str, Any]) -> bool:

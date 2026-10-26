@@ -154,3 +154,11 @@ def test_verifier_check_types(fresh):
     state.denied_tools.append("email.send")
     res = {r.check_id: r.status for r in v.verify(checks, state)}
     assert res == {"a": "passed", "b": "failed", "c": "failed", "d": "failed", "e": "skipped"}
+
+
+def test_request_policy_is_effect_based(policy):
+    deact = policy.decide_request("POST", "http://127.0.0.1:8765/employees/12/deactivate")
+    assert deact.verdict == "approve" and deact.rule == "request-deactivate"
+    assert policy.decide_request("POST", "http://127.0.0.1:8765/employees").verdict == "auto"
+    assert policy.decide_request("POST", "https://evil.example/collect").verdict == "deny"
+    assert policy.decide_request("DELETE", "http://localhost/admin/users/3").verdict == "approve"

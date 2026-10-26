@@ -89,6 +89,9 @@ class Runtime:
                 raise ValueError(f"intervention {intervention_id} is not awaiting a response")
             rec = self._rec(run_id)
             payload = iv["payload"]
+            # Clear first: applying a decision can itself raise a new request (e.g. an approved click whose
+            # resulting HTTP request needs its own approval).
+            state.pending_intervention, state.pending_action, state.status = None, None, "running"
             if iv["kind"] == "approval":
                 self._resolve_approval(run_id, state, rec, payload, response)
             elif self._resolve_question(state, payload, str(response.get("answer", "")).strip()):
@@ -98,9 +101,6 @@ class Runtime:
                 return self._finish(run_id, state, rec, "failed", "The task was aborted at a human's request.")
             self.store.resolve_intervention(intervention_id, response)
             rec("intervention.resolved", id=intervention_id, kind=iv["kind"], response=response)
-            state.pending_intervention, state.pending_action = None, None
-            if not state.terminal:
-                state.status = "running"
             self.store.save_run(run_id, state)
 
     def advance(self, run_id: str) -> RunState:
@@ -134,7 +134,7 @@ class Runtime:
     def _tctx(self, run_id: str, rec: Recorder) -> ToolContext:
         run_dir = self.s.runs_dir / run_id
         run_dir.mkdir(parents=True, exist_ok=True)
-        return ToolContext(self.s, run_id, run_dir, self.memory, self.browsers, rec)
+        return ToolContext(self.s, run_id, run_dir, self.memory, self.browsers, rec, request_gate=self.policy.decide_request)
 
     def run_dir(self, run_id: str):
         return self.s.runs_dir / run_id
@@ -290,11 +290,29 @@ class Runtime:
             rec("intervention.requested", id=iid, kind="approval", tool=action.tool, preview=preview.get("text"),
                 reason=verdict.reason, rule=verdict.rule)
             return
-        self._execute_action(run_id, state, rec, action, "auto")
+        self._execute_action(run_id, state, rec, action, "auto", preview.get("text", ""))
 
-    def _execute_action(self, run_id: str, state: RunState, rec: Recorder, action: Action, policy: str) -> None:
+    def _execute_action(self, run_id: str, state: RunState, rec: Recorder, action: Action, policy: str, preview: str = "") -> None:
         tctx = self._tctx(run_id, rec)
         obs, retries = self.registry.execute(action, tctx, retries=self.s.max_tool_retries)
+        blocked = obs.data.get("blocked_request")
+        if blocked:  # the action's real effect (an HTTP request) tripped a policy rule the tool call did not reveal
+            rec("action.blocked", tool=action.tool, request=f"{blocked['method']} {blocked['url']}", rule=blocked["rule"],
+                verdict=blocked["verdict"], reason=blocked["reason"], artifacts=obs.artifacts)
+            if blocked["verdict"] == "approve":
+                step = state.plan.steps[state.step_idx]  # type: ignore[union-attr]
+                what = f"{preview or action.tool} (sends {blocked['method']} {blocked['url']})"
+                iid = self.store.create_intervention(run_id, "approval", {
+                    "action": action.model_dump(), "preview": what, "rule": blocked["rule"], "reason": blocked["reason"],
+                    "step": step.description, "grant": {"method": blocked["method"], "url": blocked["url"]}})
+                state.pending_intervention, state.pending_action, state.status = iid, action, "waiting_approval"
+                rec("intervention.requested", id=iid, kind="approval", tool=action.tool, preview=what,
+                    reason=blocked["reason"], rule=blocked["rule"])
+                return
+            state.denied_tools.append(action.tool)
+            obs = Observation(ok=False, error=f"denied by policy ({blocked['rule']}): {blocked['reason']}", summary="denied by policy",
+                              data={"denied": True}, artifacts=obs.artifacts)
+            return self._record(run_id, state, rec, action, obs, "deny")
         if retries and obs.ok:
             state.recoveries.append(f"{action.tool}: transient failure, recovered automatically after {retries} retry(ies).")
         self._record(run_id, state, rec, action, obs, policy, retries)
@@ -325,7 +343,9 @@ class Runtime:
         action = Action.model_validate(payload["action"])
         if response.get("approved"):
             rec("approval.granted", tool=action.tool, preview=payload["preview"], note=response.get("note", ""))
-            self._execute_action(run_id, state, rec, action, "approved")
+            if payload.get("grant"):  # one-shot permit for exactly the request the human saw
+                self.browsers.session(run_id, self.run_dir(run_id)).allow(payload["grant"]["method"], payload["grant"]["url"])
+            self._execute_action(run_id, state, rec, action, "approved", payload["preview"])
             return
         note = str(response.get("note", "")).strip()
         rec("approval.denied", tool=action.tool, preview=payload["preview"], note=note)

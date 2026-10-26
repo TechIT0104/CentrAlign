@@ -219,7 +219,7 @@ def detail(request: Request, emp_id: int, msg: str = ""):
         return page("<h1>Not found</h1>")
     flash = f'<p class="flash">{html.escape(msg)}</p>' if msg else ""
     action = (
-        f'<form method="post" action="/employees/{emp_id}/deactivate"><button class="danger" type="submit">Deactivate employee</button></form>'
+        f'<form method="post" action="/employees/{emp_id}/deactivate"><button class="danger" type="submit">{"Disable account" if chaos.get("rename_deactivate") else "Deactivate employee"}</button></form>'
         if e["status"] == "active"
         else "<p>This employee is inactive.</p>"
     )

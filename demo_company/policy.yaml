@@ -41,3 +41,22 @@ rules:
     when: { tool: "browser.click", preview_match: "(?i)deactivate" }
     action: approve
     reason: "Deactivating an account revokes all access and needs human approval."
+
+# Rules above match what a tool call *says* it does. These match what the browser actually *sends*,
+# so they still hold if a button is renamed, moved or scripted. Defence in depth: the strongest rule wins.
+request_default: auto
+request_rules:
+  - id: request-external-host
+    when: { host_not_in: ["127.0.0.1", "localhost"] }
+    action: deny
+    reason: "Requests may only go to approved internal systems."
+
+  - id: request-deactivate
+    when: { method: "POST", url_match: "/employees/\\d+/deactivate" }
+    action: approve
+    reason: "This request deactivates an account and revokes all access; it needs human approval however it was triggered."
+
+  - id: request-privileged-write
+    when: { method: "POST|PUT|PATCH|DELETE", url_match: "/(admin|roles|permissions)(/|$)" }
+    action: approve
+    reason: "Writes to privileged areas need human approval."

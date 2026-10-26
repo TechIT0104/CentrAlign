@@ -17,6 +17,7 @@ CHAOS_PRESETS = {
     "rename": {"rename_button": True},  # submit button label changes
     "expiry": {"session_expiry_after": 5},  # session dies mid-task
     "slow": {"slow_create": 2.0},  # sluggish save
+    "relabel": {"rename_deactivate": True},  # "Deactivate employee" becomes "Disable account"
 }
 
 

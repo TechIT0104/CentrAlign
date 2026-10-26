@@ -27,6 +27,8 @@ class ToolContext:
     memory: Any = None  # centralign.memory.Memory
     browsers: Any = None  # centralign.tools.browser.BrowserManager
     emit: Callable[..., None] = lambda *a, **k: None
+    # (method, url) -> policy Verdict, consulted for every state-changing request a browser action sends
+    request_gate: Callable[[str, str], Any] | None = None
 
 
 class Tool:

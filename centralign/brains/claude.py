@@ -199,23 +199,13 @@ class ClaudeBrain(Brain):
             "input_schema": {"type": "object", "properties": {"acceptance": PLAN_TOOL["input_schema"]["properties"]["acceptance"]},
                              "required": ["acceptance"]},
         }
-        prompt = (f"# Request
-{goal}
-
-# Company context
-{memory_text}
-
-"
-                  + ("# Answers from humans
-" + "
-".join(f"- {k}: {v}" for k, v in answers.items()) + "
-
-" if answers else "")
-                  + CHECK_DOC + "
-
-You are the QA owner. You have NOT seen any plan and must not assume how the work will be done. "
-                  "From the request and the company's own completion criteria (SOPs), define the checks that prove the "
-                  "outcome in the real systems of record. Call submit_checks.")
+        answers_text = "# Answers from humans\n" + "\n".join(f"- {k}: {v}" for k, v in answers.items()) + "\n\n" if answers else ""
+        prompt = (
+            f"# Request\n{goal}\n\n# Company context\n{memory_text}\n\n{answers_text}{CHECK_DOC}\n\n"
+            "You are the QA owner. You have NOT seen any plan and must not assume how the work will be done. "
+            "From the request and the company's own completion criteria (SOPs), define the checks that prove the "
+            "outcome in the real systems of record. Call submit_checks."
+        )
         tool, _ = self._call([{"role": "user", "content": prompt}], [tool_def], "high", 4000,
                              system="You define independent acceptance criteria for work done by someone else. Respond only by calling the tool.")
         return [Check(**c) for c in tool.input.get("acceptance", [])]

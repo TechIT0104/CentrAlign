@@ -237,7 +237,7 @@ def h_deactivate(ctx) -> Handler:
         return Done("employee was already inactive", skipped=True)
     yield from nav(p, f"/employees/{ctx.facts['employee_id']}")
     page = yield A("browser.read_page", "Read the employee page")
-    btn = need(find(page, "deactivate", tag="button"), "deactivate button")
+    btn = need(find(page, "deactivate", "disable", "remove access", tag="button"), "account-removal button")
     obs = yield A("browser.click", "Deactivate the account", target=btn)
     if obs.data.get("denied"):
         return Done(f"deactivation not performed: {obs.error}", skipped=True)

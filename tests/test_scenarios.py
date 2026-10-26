@@ -200,3 +200,24 @@ def test_independent_checks_are_merged_and_deduplicated(fresh):
     clash = Check(id="c1", description="other", type="file_exists", params={"path": "b"})
     out = merge_checks([a], [dup, clash], prefix="r1")
     assert [c.id for c in out] == ["c1", "r1-c1"] and out[1].params == {"path": "b"}
+
+
+def test_approval_follows_the_effect_not_the_button_label(rt, fresh):
+    """Relabel 'Deactivate employee' to 'Disable account': the click-level rule no longer matches,
+    but the request the click sends still requires approval, and declining leaves the account intact."""
+    httpx.post(f"{fresh.acmehr_url}/__admin/chaos", json=chaos_from_names("relabel"))
+    state, rid = run(rt, "Offboard Sam Okafor", approve=False)
+    reqs = events(rt, rid, "intervention.requested")
+    assert any(r.get("rule") == "request-deactivate" for r in reqs), reqs
+    assert not any(r.get("rule") == "deactivate-account" for r in reqs)  # the label rule did NOT fire
+    assert events(rt, rid, "action.blocked")[0]["request"].endswith("/deactivate")
+    assert hr(fresh, "sam.okafor@acme.test")[0]["status"] == "active"
+
+
+def test_approved_request_is_released_exactly_once(rt, fresh):
+    httpx.post(f"{fresh.acmehr_url}/__admin/chaos", json=chaos_from_names("relabel"))
+    state, rid = run(rt, "Offboard Sam Okafor")
+    assert state.status == "completed", state.summary
+    assert hr(fresh, "sam.okafor@acme.test")[0]["status"] == "inactive"
+    granted = [e for e in events(rt, rid, "approval.granted")]
+    assert len(granted) == 1 and "sends POST" in granted[0]["preview"]

@@ -55,6 +55,9 @@ class BrowserSession:
         self.state_file = run_dir / "browser_state.json"
         self.shots = len(list(self.evidence.glob("*.png")))
         self.last_status: int | None = None
+        self.gate = None  # (method, url) -> policy Verdict; set per tool call by the runtime
+        self.allowed: set[str] = set()  # one-shot grants for requests a human approved
+        self.blocked: list[dict[str, str]] = []  # requests the gate stopped during the current action
         self._jobs: queue.Queue = queue.Queue()
         self._ready = threading.Event()
         self._boot_error: Exception | None = None
@@ -77,6 +80,7 @@ class BrowserSession:
                     kwargs["storage_state"] = str(self.state_file)
                 ctx = browser.new_context(**kwargs)
                 ctx.set_default_timeout(6000)
+                ctx.route("**/*", self._route)
                 page = ctx.new_page()
                 page.on(
                     "response",
@@ -113,6 +117,27 @@ class BrowserSession:
 
     def close(self) -> None:
         self._jobs.put(None)
+
+    # -- effect-level policy ------------------------------------------------
+    def allow(self, method: str, url: str) -> None:
+        """Grant one human-approved request (consumed when it is sent)."""
+        self.allowed.add(f"{method.upper()} {url}")
+
+    def _route(self, route, request) -> None:
+        """Every request the page sends passes the policy gate, whatever UI element triggered it."""
+        method = request.method.upper()
+        if self.gate is None or (method == "GET" and request.resource_type != "document"):
+            return route.continue_()
+        key = f"{method} {request.url}"
+        if key in self.allowed:
+            self.allowed.discard(key)
+            return route.continue_()
+        verdict = self.gate(method, request.url)
+        if verdict.verdict == "auto":
+            return route.continue_()
+        self.blocked.append({"method": method, "url": request.url, "verdict": verdict.verdict,
+                             "rule": verdict.rule, "reason": verdict.reason})
+        route.abort()
 
     # -- helpers executed on the worker thread ------------------------
     def snapshot_and_save(self, page, label: str) -> str:
@@ -167,17 +192,25 @@ def _page_obs(sess: BrowserSession, page, label: str, summary: str) -> Observati
         text = page.inner_text("body")[:900]
     except Exception:
         text = ""
-    return Observation(
-        ok=True,
-        summary=summary,
-        data={"url": page.url, "title": page.title(), "http_status": sess.last_status, "page_text": text},
-        artifacts=[shot] if shot else [],
-    )
+    data = {"url": page.url, "title": page.title(), "http_status": sess.last_status, "page_text": text}
+    page.wait_for_timeout(150)  # let an aborted navigation's route handler finish recording
+    if sess.blocked:
+        blocked, sess.blocked = sess.blocked[0], []
+        data["blocked_request"] = blocked
+        return Observation(
+            ok=False, summary=f"request blocked by policy: {blocked['method']} {blocked['url']}",
+            error=f"the page tried to send {blocked['method']} {blocked['url']}, which policy rule "
+                  f"'{blocked['rule']}' {'requires a human to approve' if blocked['verdict'] == 'approve' else 'forbids'}",
+            data=data, artifacts=[shot] if shot else [],
+        )
+    return Observation(ok=True, summary=summary, data=data, artifacts=[shot] if shot else [])
 
 
 class _BrowserTool(Tool):
     def _sess(self, ctx: ToolContext) -> BrowserSession:
-        return ctx.browsers.session(ctx.run_id, ctx.run_dir)
+        sess = ctx.browsers.session(ctx.run_id, ctx.run_dir)
+        sess.gate = ctx.request_gate
+        return sess
 
     @staticmethod
     def _element_failure(target: str, e: Exception) -> Observation:
