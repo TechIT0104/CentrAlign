@@ -255,3 +255,21 @@ def test_offboarding_survives_session_expiry_after_the_save_without_double_actin
     assert state.status == "completed", state.summary
     assert hr(fresh, "sam.okafor@acme.test")[0]["status"] == "inactive"
     assert len(events(rt, rid, "approval.granted")) == 1 and state.replans == 0
+
+
+def test_first_name_only_asks_for_the_full_name_and_then_uses_the_answer(rt, fresh):
+    state, rid = run(rt, "Onboard Priya into Engineering, starting 2026-11-02", answers=["Priya Sharma"])
+    assert state.status == "completed", state.summary
+    qs = [d["question"] for d in events(rt, rid, "intervention.requested") if d["kind"] == "question"]
+    assert qs == ["What is the new hire's full name?"]
+    assert hr(fresh, "priya.sharma@acme.test")[0]["department"] == "Engineering"
+
+
+def test_an_unusable_name_answer_gets_one_clearer_follow_up_then_a_clear_failure(rt, fresh):
+    state, rid = run(rt, "Onboard Priya into Engineering, starting 2026-11-02", answers=["Priya", "Priya Sharma"])
+    assert state.status == "completed"
+    qs = [d["question"] for d in events(rt, rid, "intervention.requested") if d["kind"] == "question"]
+    assert len(qs) == 2 and "first and last name" in qs[1]
+    state, rid = run(rt, "Onboard Priya into Engineering, starting 2026-11-02", answers=["Priya", "Priya"])
+    assert state.status == "failed" and "could not use the answer" in state.summary
+    assert len(hr(fresh, q="priya")) == 1  # only the first run's Priya Sharma; the failed one created nothing

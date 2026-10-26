@@ -226,6 +226,10 @@ class Runtime:
             rec("intervention.requested", id=iid, kind="question", question=m.question, why="required information is missing from the request")
             return
         if not plan.steps:
+            if plan.missing_info:  # we asked, the human answered, and the planner still cannot use it
+                keys = ", ".join(m.key for m in plan.missing_info)
+                return self._finish(run_id, state, rec, "failed",
+                                    f"I still could not use the answer I was given for: {keys}. Please restate the request with that detail included.")
             return self._finish(run_id, state, rec, "failed", "The planner could not produce any steps for this request.")
         try:  # an independent call that has never seen the plan
             independent = self.brain.derive_checks(state.goal, req.memory_text, dict(state.answers))

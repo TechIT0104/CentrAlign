@@ -303,17 +303,30 @@ class ScriptedBrain(Brain):
             "The offline scripted brain only knows onboarding/offboarding. Set ANTHROPIC_API_KEY to use the Claude brain."
         )
 
+    @staticmethod
+    def _name_or_ask(found: str | None, answers: dict[str, str], who: str, min_words: int) -> tuple[str | None, MissingInfo | None]:
+        """Use the name from the request, else from a human's answer. Only ask again (once, with a clearer
+        question) if the answer is unusable, so an answered question can never leave the plan empty."""
+        if found:
+            return found, None
+        for key in ("name", "full_name"):
+            given = " ".join(answers.get(key, "").split())
+            if len(given.split()) >= min_words:
+                return given, None
+        if "name" in answers:  # answered, but too short: say exactly what is needed
+            return None, MissingInfo(key="full_name", question=f"I need {who}'s first and last name (for example 'Priya Sharma'). What is it?")
+        return None, MissingInfo(key="name", question=f"What is {who}'s full name?")
+
     def _name(self, goal: str, verbs: str) -> str | None:
         m = re.search(rf"(?i:{verbs})\s+(?:(?i:new hire|employee)\s+)?([A-Z][a-zA-Z'-]+(?:\s+[A-Z][a-zA-Z'-]+){{1,2}})", goal)
         return m.group(1) if m else None
 
     def _plan_onboard(self, req: PlanRequest) -> Plan:
         goal, ans = req.goal, req.answers
-        name = self._name(goal, "onboard|hire|welcome|add")
+        name, ask = self._name_or_ask(self._name(goal, "onboard|hire|welcome|add"), ans, "the new hire", 2)
         sources = [c.ref for c in req.memory["docs"]][:4]
         if not name:
-            return Plan(understanding="Onboard a new hire, but no name was found.",
-                        missing_info=[MissingInfo(key="name", question="What is the new hire's full name?")])
+            return Plan(understanding="Onboard a new hire, but no usable name was found.", missing_info=[ask], sources=sources)
         first, last = name.split()[0], name.split()[-1]
         email = f"{first}.{last}@acme.test".lower()
         # Read conventions from the retrieved SOP rather than hard-coding them.
@@ -369,11 +382,10 @@ class ScriptedBrain(Brain):
         )
 
     def _plan_offboard(self, req: PlanRequest) -> Plan:
-        name = self._name(req.goal, "offboard|terminate|deactivate|off-board")
+        name, ask = self._name_or_ask(self._name(req.goal, "offboard|terminate|deactivate|off-board"), req.answers, "the employee", 1)
         sources = [c.ref for c in req.memory["docs"]][:4]
         if not name:
-            return Plan(understanding="Offboard an employee, but no name was found.",
-                        missing_info=[MissingInfo(key="name", question="Which employee should be offboarded?")])
+            return Plan(understanding="Offboard an employee, but no usable name was found.", missing_info=[ask], sources=sources)
         p = {"name": name, "base": self.base}
         steps = [
             Step(id="s1", kind="login", description="Sign in to AcmeHR with the ops service account", params=p),
