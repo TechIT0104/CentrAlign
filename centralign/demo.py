@@ -75,6 +75,9 @@ def reset_acmehr(s: Settings, chaos: dict | None = None) -> None:
 
 def prepare_demo(s: Settings, chaos: dict | None = None, fresh: bool = True) -> subprocess.Popen | None:
     s.ensure_dirs()
+    # The demo company's service-account password is a fake; default it so a missing .env cannot break sign-in.
+    os.environ.setdefault("SECRET_ACMEHR_PASSWORD", "ops-pass-123")
+    os.environ.setdefault("ACMEHR_PASSWORD", "ops-pass-123")
     proc = start_acmehr(s)
     if fresh:
         reset_files(s)

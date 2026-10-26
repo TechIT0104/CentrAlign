@@ -7,7 +7,9 @@ from typing import Any
 
 from .config import Settings
 from .demo import chaos_from_names, prepare_demo, reset_acmehr, reset_files
-from .runtime import Runtime
+import time
+
+from .runtime import Runtime, parse_every
 
 C = {"dim": "\033[2m", "b": "\033[1m", "g": "\033[32m", "r": "\033[31m", "y": "\033[33m", "c": "\033[36m", "0": "\033[0m"}
 
@@ -155,6 +157,43 @@ def cmd_resolve(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_schedule(args: argparse.Namespace) -> int:
+    rt = Runtime(Settings.load(brain="scripted"))
+    if args.sub == "add":
+        sid = rt.store.add_schedule(args.goal, parse_every(args.every))
+        print(f"schedule #{sid}: '{args.goal}' every {args.every} (first run in {args.every})")
+    elif args.sub == "rm":
+        rt.store.remove_schedule(args.id)
+        print(f"removed schedule #{args.id}")
+    else:
+        for s in rt.store.schedules():
+            due = time.strftime("%Y-%m-%d %H:%M", time.localtime(s["next_run"]))
+            print(f"#{s['id']}  every {s['every_seconds']}s  next {due}  last run {s['last_run_id'] or '-'}  {s['goal'][:70]}")
+    return 0
+
+
+def cmd_worker(args: argparse.Namespace) -> int:
+    """Background worker: starts scheduled runs and resumes runs whose worker died."""
+    rt = build_runtime(args)
+    proc = prepare_demo(rt.s, fresh=False)
+    rt.listeners.append(lambda t, d: (line := format_event(t, d)) and print(line, flush=True))
+    print(f"worker {rt.owner} started (poll {args.poll}s). Ctrl-C to stop.")
+    try:
+        while True:
+            res = rt.worker_tick(grace=args.grace)
+            if res["scheduled"] or res["recovered"]:
+                print(paint("c", f"scheduled {res['scheduled']}  recovered {res['recovered']}"))
+            if args.once:
+                rt._pool.shutdown(wait=True)
+                return 0
+            time.sleep(args.poll)
+    except KeyboardInterrupt:
+        return 0
+    finally:
+        if proc:
+            proc.terminate()
+
+
 def cmd_feedback(args: argparse.Namespace) -> int:
     rt = Runtime(Settings.load(brain="scripted"))
     rt.store.add_feedback(args.text)
@@ -209,6 +248,24 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("text", nargs="?", default="")
         p.add_argument("--brain", choices=["claude", "scripted"])
         p.set_defaults(fn=cmd_resolve, action=name)
+
+    p = sub.add_parser("schedule", help="manage recurring tasks")
+    ss = p.add_subparsers(dest="sub", required=True)
+    q = ss.add_parser("add", help="run GOAL every INTERVAL")
+    q.add_argument("goal")
+    q.add_argument("--every", required=True, help="e.g. 30m, 6h, 1d, 1w")
+    ss.add_parser("list")
+    q = ss.add_parser("rm")
+    q.add_argument("id", type=int)
+    p.set_defaults(fn=cmd_schedule)
+
+    p = sub.add_parser("worker", help="background worker: scheduled tasks + crash recovery")
+    p.add_argument("--once", action="store_true", help="do one pass and exit")
+    p.add_argument("--poll", type=float, default=10)
+    p.add_argument("--grace", type=float, default=30, help="seconds a running run may be idle before it counts as orphaned")
+    p.add_argument("--brain", choices=["claude", "scripted"])
+    p.add_argument("--headed", action="store_true")
+    p.set_defaults(fn=cmd_worker)
 
     p = sub.add_parser("feedback", help="teach the operator a standing rule")
     p.add_argument("text")

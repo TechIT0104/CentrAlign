@@ -6,8 +6,13 @@ passes through the policy engine, every effect is audited, and "done" is decided
 """
 from __future__ import annotations
 
+import os
+import re
+import socket
 import threading
+import time
 import traceback
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
@@ -35,6 +40,8 @@ class Runtime:
         self.brain = brain or make_brain(self.s)
         self.verifier = Verifier(self.s, self.brain)
         self._locks: dict[str, threading.Lock] = {}
+        self.owner = f"{socket.gethostname()}:{os.getpid()}:{uuid.uuid4().hex[:6]}"  # identity for run leases
+        self.lease_ttl = 60.0
         self._pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="run")
         self._glock = threading.Lock()
         self.listeners: list = []  # callbacks(type, data) fed with every audit event, e.g. live CLI/UI traces
@@ -78,38 +85,54 @@ class Runtime:
                 self.store.save_run(run_id, state)
                 self._rec(run_id)("run.cancelled")
                 self.browsers.close(run_id)
+                self.store.write_anchor(run_id)
 
     def resolve(self, intervention_id: int, **response: Any) -> None:
         """Record a human's answer to an approval request or a question. Call advance() afterwards."""
         iv = self.store.get_intervention(intervention_id)
         run_id = iv["run_id"]
         with self._lock(run_id):
-            state = self.store.load_run(run_id)
-            if state.pending_intervention != intervention_id or iv["status"] != "pending":
-                raise ValueError(f"intervention {intervention_id} is not awaiting a response")
-            rec = self._rec(run_id)
-            payload = iv["payload"]
-            # Clear first: applying a decision can itself raise a new request (e.g. an approved click whose
-            # resulting HTTP request needs its own approval).
-            state.pending_intervention, state.pending_action, state.status = None, None, "running"
-            if iv["kind"] == "approval":
-                self._resolve_approval(run_id, state, rec, payload, response)
-            elif self._resolve_question(state, payload, str(response.get("answer", "")).strip()):
-                self.store.resolve_intervention(intervention_id, response)
-                rec("intervention.resolved", id=intervention_id, kind=iv["kind"], response=response)
-                state.pending_intervention = None
-                return self._finish(run_id, state, rec, "failed", "The task was aborted at a human's request.")
+            if not self.store.claim_lease(run_id, self.owner, self.lease_ttl):
+                raise ValueError(f"run {run_id} is being advanced by another worker; try again shortly")
+            try:
+                self._resolve_locked(run_id, intervention_id, iv, response)
+            finally:
+                self.store.release_lease(run_id, self.owner)
+                self.store.write_anchor(run_id)
+
+    def _resolve_locked(self, run_id: str, intervention_id: int, iv: dict, response: dict) -> None:
+        state = self.store.load_run(run_id)
+        if state.pending_intervention != intervention_id or iv["status"] != "pending":
+            raise ValueError(f"intervention {intervention_id} is not awaiting a response")
+        rec = self._rec(run_id)
+        payload = iv["payload"]
+        # Clear first: applying a decision can itself raise a new request (e.g. an approved click whose
+        # resulting HTTP request needs its own approval).
+        state.pending_intervention, state.pending_action, state.status = None, None, "running"
+        if iv["kind"] == "approval":
+            self._resolve_approval(run_id, state, rec, payload, response)
+        elif self._resolve_question(state, payload, str(response.get("answer", "")).strip()):
             self.store.resolve_intervention(intervention_id, response)
             rec("intervention.resolved", id=intervention_id, kind=iv["kind"], response=response)
-            self.store.save_run(run_id, state)
+            state.pending_intervention = None
+            return self._finish(run_id, state, rec, "failed", "The task was aborted at a human's request.")
+        self.store.resolve_intervention(intervention_id, response)
+        rec("intervention.resolved", id=intervention_id, kind=iv["kind"], response=response)
+        self.store.save_run(run_id, state)
 
     def advance(self, run_id: str) -> RunState:
         """Run ticks until the run finishes or needs a human. Safe to call from any thread."""
         with self._lock(run_id):
             state = self.store.load_run(run_id)
+            # Cross-process mutual exclusion: only the lease holder may drive a run.
+            if state.terminal or state.waiting or not self.store.claim_lease(run_id, self.owner, self.lease_ttl):
+                return state
             rec = self._rec(run_id)
             try:
                 while not state.terminal and not state.waiting:
+                    if not self.store.claim_lease(run_id, self.owner, self.lease_ttl):  # renew; lost it => stop at once
+                        rec("lease.lost", owner=self.owner)
+                        return self.store.load_run(run_id)
                     self._tick(run_id, state, rec)
                     self.store.save_run(run_id, state)
             except Exception as e:
@@ -117,9 +140,34 @@ class Runtime:
                 rec("run.error", error=detail, trace=traceback.format_exc()[-1500:])
                 self._finish(run_id, state, rec, "failed", f"The operator stopped because of an internal error: {detail}")
                 self.store.save_run(run_id, state)
+            finally:
+                self.store.release_lease(run_id, self.owner)
+                self.store.write_anchor(run_id)
             if state.terminal:
                 self.browsers.close(run_id)
             return state
+
+    # ------------------------------------------------- background worker
+    def run_due_schedules(self) -> list[str]:
+        """Start a run for every schedule whose time has come, then move it to its next slot."""
+        started = []
+        for sch in self.store.due_schedules():
+            run_id = self.submit_background(sch["goal"])
+            nxt = max(sch["next_run"] + sch["every_seconds"], time.time() + 1)  # skip slots missed while down
+            self.store.mark_scheduled(sch["id"], run_id, nxt)
+            started.append(run_id)
+        return started
+
+    def recover_orphans(self, grace: float = 30.0) -> list[str]:
+        """Resume runs whose worker died: status 'running' but the lease has expired."""
+        ids = self.store.orphaned_runs(grace)
+        for run_id in ids:
+            self._rec(run_id)("run.recovered", by=self.owner)
+            self.advance_background(run_id)
+        return ids
+
+    def worker_tick(self, grace: float = 30.0) -> dict[str, list[str]]:
+        return {"scheduled": self.run_due_schedules(), "recovered": self.recover_orphans(grace)}
 
     # --------------------------------------------------------------- plumbing
     def _lock(self, run_id: str) -> threading.Lock:
@@ -424,3 +472,14 @@ class Runtime:
             elif e["type"] in ("anomaly", "step.failed", "approval.denied", "approval.granted", "intervention.requested", "intervention.resolved"):
                 lines.append(f"{e['type']}: {d}")
         return "\n".join(lines)
+
+
+_UNITS = {"s": 1, "m": 60, "h": 3600, "d": 86400, "w": 604800}
+
+
+def parse_every(text: str) -> int:
+    """'90s', '15m', '6h', '1d', '2w' -> seconds."""
+    m = re.fullmatch(r"\s*(\d+)\s*([smhdw])\s*", text.lower())
+    if not m or int(m.group(1)) == 0:
+        raise ValueError(f"bad interval {text!r}; use e.g. 30m, 6h, 1d, 1w")
+    return int(m.group(1)) * _UNITS[m.group(2)]
