@@ -129,6 +129,7 @@ class RunState(BaseModel):
     pending_action: Action | None = None
     denied_tools: list[str] = Field(default_factory=list)
     checks: list[CheckResult] = Field(default_factory=list)
+    frozen_checks: list[Check] = Field(default_factory=list)  # the definition of "done": only ever grows
     recoveries: list[str] = Field(default_factory=list)  # human-readable recovery notes
     summary: str = ""
     failure: str = ""
@@ -140,3 +141,22 @@ class RunState(BaseModel):
     @property
     def waiting(self) -> bool:
         return self.status in ("waiting_approval", "waiting_human")
+
+
+def merge_checks(frozen: list[Check], new: list[Check], prefix: str = "n") -> list[Check]:
+    """Acceptance criteria are append-only: a replan may add checks but can never remove or weaken one."""
+
+    def sig(c: Check) -> str:
+        return json.dumps([c.type, c.params, c.depends_on_tool], sort_keys=True, default=str)
+
+    out, seen, ids = list(frozen), {sig(c) for c in frozen}, {c.id for c in frozen}
+    for c in new:
+        if sig(c) in seen:
+            continue
+        cid = c.id
+        while cid in ids:
+            cid = f"{prefix}-{cid}"
+        out.append(c.model_copy(update={"id": cid}))
+        seen.add(sig(c))
+        ids.add(cid)
+    return out

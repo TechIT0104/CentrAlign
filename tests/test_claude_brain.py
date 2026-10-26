@@ -106,3 +106,13 @@ def test_judge_and_reflect():
 
     r = ClaudeBrain("m", FakeClient(tool_use("save_lessons", lessons=["a", "b"])))
     assert r.reflect(RunState(goal="g"), "trail") == ["a", "b"]
+
+
+def test_derive_checks_is_a_separate_call_that_never_sees_a_plan():
+    acc = [{"id": "q1", "description": "record active", "type": "http_json", "params": {"url": "http://127.0.0.1/x", "expect": {"a": 1}}}]
+    client = FakeClient(tool_use("submit_checks", acceptance=acc))
+    out = ClaudeBrain("m", client).derive_checks("Onboard X", "SOP: completion criteria ...", {"department": "Design"})
+    assert [c.id for c in out] == ["q1"]
+    prompt = client.calls[0]["messages"][0]["content"]
+    assert "have NOT seen any plan" in prompt and "completion criteria" in prompt and "department: Design" in prompt
+    assert [t["name"] for t in client.calls[0]["tools"]] == ["submit_checks"]

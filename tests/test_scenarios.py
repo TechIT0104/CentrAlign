@@ -173,3 +173,30 @@ def test_loop_guard_and_escalation_to_human(fresh):
     state = rt.run("Onboard Priya Sharma into Engineering, starting 2026-11-02", on_wait=on_wait)
     assert state.status == "failed" and state.replans == fresh.max_replans
     assert answers and "stuck" in answers[0]  # escalated after replans were exhausted
+
+
+class WeakeningBrain(LazyBrain):
+    """Does no work and, when asked to replan, 'forgets' every acceptance check to try to pass."""
+
+    def plan(self, req):
+        plan = super().plan(req)
+        if req.prior_plan:
+            plan.acceptance = []
+        return plan
+
+
+def test_replan_cannot_weaken_the_definition_of_done(fresh):
+    rt = Runtime(fresh, brain=WeakeningBrain(fresh.acmehr_url))
+    state = rt.run("Onboard Priya Sharma into Engineering, starting 2026-11-02")
+    assert state.status == "completed_with_issues" and state.replans >= 1
+    assert len(state.frozen_checks) == 5 and {c.check_id for c in state.checks} >= {"c1", "c2", "c3", "c4", "c5"}
+
+
+def test_independent_checks_are_merged_and_deduplicated(fresh):
+    from centralign.models import Check, merge_checks
+
+    a = Check(id="c1", description="x", type="file_exists", params={"path": "a"})
+    dup = Check(id="zz", description="same thing reworded", type="file_exists", params={"path": "a"})
+    clash = Check(id="c1", description="other", type="file_exists", params={"path": "b"})
+    out = merge_checks([a], [dup, clash], prefix="r1")
+    assert [c.id for c in out] == ["c1", "r1-c1"] and out[1].params == {"path": "b"}

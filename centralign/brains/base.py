@@ -57,6 +57,13 @@ class Brain(ABC):
     @abstractmethod
     def next_decision(self, ctx: StepContext) -> Decision: ...
 
+    def derive_checks(self, goal: str, memory_text: str, answers: dict[str, str]) -> list[Check]:
+        """Acceptance criteria derived from the request and the company's completion criteria ONLY.
+
+        Called separately from plan() and never shown the plan, so the party doing the work does not
+        get to define what 'done' means. Brains without an independent source return []."""
+        return []
+
     @abstractmethod
     def judge(self, check: Check, evidence: str) -> tuple[bool, str]:
         """Fuzzy acceptance check. Receives only evidence, never the executor's narrative."""

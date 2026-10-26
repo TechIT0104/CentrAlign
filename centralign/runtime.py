@@ -15,7 +15,7 @@ from .brains import Brain, BrainUnsupported, PlanRequest, StepContext, make_brai
 from .config import Settings
 from .events import Recorder
 from .memory import Memory
-from .models import Action, HistoryItem, Observation, Plan, RunState, StepResult
+from .models import Action, HistoryItem, Observation, Plan, RunState, StepResult, merge_checks
 from .policy import Policy
 from .store import Store
 from .tools import BrowserManager, Registry, ToolContext, build_registry
@@ -174,8 +174,16 @@ class Runtime:
             return
         if not plan.steps:
             return self._finish(run_id, state, rec, "failed", "The planner could not produce any steps for this request.")
+        try:  # an independent call that has never seen the plan
+            independent = self.brain.derive_checks(state.goal, req.memory_text, dict(state.answers))
+        except Exception as e:
+            independent = []
+            rec("checks.derive_error", error=str(e))
+        plan.acceptance = merge_checks(independent, plan.acceptance, prefix="p")
+        state.frozen_checks = list(plan.acceptance)
         state.plan, state.phase, state.step_idx, state.history = plan, "executing", 0, []
         rec("plan.created", plan=plan.model_dump())
+        rec("checks.frozen", independent=[c.id for c in independent], total=len(plan.acceptance))
 
     def _replan(self, run_id: str, state: RunState, rec: Recorder, reason: str) -> None:
         assert state.plan
@@ -188,6 +196,8 @@ class Runtime:
             return self._finish(run_id, state, rec, "failed", str(e))
         done_kinds = {r.kind for r in state.step_results if r.kind and r.status != "failed"}
         new.steps = [s.model_copy(update={"id": f"r{state.replans}-{s.id}"}) for s in new.steps if not (s.kind and s.kind in done_kinds)]
+        new.acceptance = merge_checks(state.frozen_checks, new.acceptance, prefix=f"r{state.replans}")
+        state.frozen_checks = list(new.acceptance)
         state.plan, state.step_idx, state.history = new, 0, []
         state.phase = "executing" if new.steps else "verifying"
         rec("plan.revised", plan=new.model_dump())
