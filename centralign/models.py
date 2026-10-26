@@ -86,6 +86,7 @@ class Decision(BaseModel):
     question: str = ""  # ask
     facts: dict[str, Any] = Field(default_factory=dict)  # done: values later steps need
     skipped: bool = False  # done, but the intended effect was intentionally not performed
+    final: bool = False  # failed: a human decided to stop (or it is impossible); replanning would only re-ask
 
 
 class StepResult(BaseModel):

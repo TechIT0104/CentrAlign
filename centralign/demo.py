@@ -18,6 +18,11 @@ CHAOS_PRESETS = {
     "expiry": {"session_expiry_after": 5},  # session dies mid-task
     "slow": {"slow_create": 2.0},  # sluggish save
     "relabel": {"rename_deactivate": True},  # "Deactivate employee" becomes "Disable account"
+    # Failures the offline scripted brain was NOT written for (a model must adapt, or the run must stop safely):
+    "newfield": {"require_employment_type": True},  # the form gains a required field
+    "shuffle": {"shuffle_fields": True},  # field names/labels change
+    "weekday": {"weekday_only": True},  # validation: start date must be Mon-Fri
+    "outage": {"maintenance_once": 1},  # the form page returns 503 once
 }
 
 
@@ -39,6 +44,15 @@ def reset_files(s: Settings) -> None:
     if s.files_dir.exists():
         shutil.rmtree(s.files_dir)
     shutil.copytree(s.company_dir / "files_seed", s.files_dir)
+    # Keep the roster consistent with AcmeHR's relative-date seed people (see acmehr.app.upcoming_hires).
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    from demo_company.acmehr.app import upcoming_hires
+
+    roster = s.files_dir / "data" / "team_roster.csv"
+    with roster.open("a", newline="", encoding="utf-8") as f:
+        for name, email, dept, start, _acc, _mgr, status in upcoming_hires():
+            f.write(f"{name},{email},{dept},{start},{status}\n")
 
 
 def acmehr_up(s: Settings) -> bool:

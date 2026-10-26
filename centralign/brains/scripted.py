@@ -25,7 +25,9 @@ JARGON = ["synergy", "leverage", "circle back", "paradigm", "bandwidth", "touch 
 
 
 class Fail(Exception):
-    pass
+    def __init__(self, msg: str, final: bool = False):
+        super().__init__(msg)
+        self.final = final
 
 
 @dataclass
@@ -119,7 +121,7 @@ def h_dup_check(ctx) -> Handler:
     )
     if "reuse" in answer.data.get("answer", "").lower():
         return Done("existing record found; human chose to reuse it", {"reuse": True})
-    raise Fail("existing record found; human chose to stop")
+    raise Fail("existing record found; a human chose to stop", final=True)
 
 
 def h_create_employee(ctx) -> Handler:
@@ -231,19 +233,32 @@ def h_find_employee(ctx) -> Handler:
                 {"employee_id": emp_id, "email": em.group() if em else "", "already_inactive": status == "inactive"})
 
 
+def _is_inactive(page: Observation) -> bool:
+    return bool(re.search(r"Status\s+inactive", page.data.get("text", "")))
+
+
 def h_deactivate(ctx) -> Handler:
     p = ctx.step.params
     if ctx.facts.get("already_inactive"):
         return Done("employee was already inactive", skipped=True)
-    yield from nav(p, f"/employees/{ctx.facts['employee_id']}")
+    path = f"/employees/{ctx.facts['employee_id']}"
+    yield from nav(p, path)
     page = yield A("browser.read_page", "Read the employee page")
+    if _is_inactive(page):  # e.g. an earlier attempt went through but its confirmation page was lost
+        return Done("account is deactivated in AcmeHR (confirmed on the record)")
     btn = need(find(page, "deactivate", "disable", "remove access", tag="button"), "account-removal button")
     obs = yield A("browser.click", "Deactivate the account", target=btn)
     if obs.data.get("denied"):
         return Done(f"deactivation not performed: {obs.error}", skipped=True)
-    if "Employee deactivated" not in obs.data.get("page_text", ""):
-        raise Fail("AcmeHR did not confirm the deactivation")
-    return Done("account deactivated in AcmeHR")
+    if "Employee deactivated" in obs.data.get("page_text", ""):
+        return Done("account deactivated in AcmeHR")
+    # No confirmation (e.g. the session expired on the redirect after the save). The outcome is unknown, so
+    # look at the record itself before deciding: never retry an irreversible action on a guess.
+    yield from nav(p, path)
+    check = yield A("browser.read_page", "Check the record: did the deactivation take effect?")
+    if _is_inactive(check):
+        return Done("account deactivated in AcmeHR (confirmed on the record after a lost confirmation page)")
+    raise Fail("AcmeHR did not confirm the deactivation and the record is still active")
 
 
 def h_roster_inactive(ctx) -> Handler:
@@ -330,10 +345,13 @@ class ScriptedBrain(Brain):
             Step(id="s6", kind="send_email", description="Email the welcome document to the new hire (needs approval)", expected="Email in outbox", params=p),
         ]
         checks = [
-            Check(id="c1", description="AcmeHR has the employee as active with the requested department, start date and access level",
+            Check(id="c1", description="AcmeHR has the employee as active with the requested department and start date",
                   type="http_json", params={"url": f"{self.base}/api/employees?email={email}",
                                             "expect": {"items.0.status": "active", "items.0.department": dept,
-                                                       "items.0.start_date": start.isoformat(), "items.0.access_level": access}}),
+                                                       "items.0.start_date": start.isoformat()}}),
+            Check(id="c1b", description=f"AcmeHR grants {access} access as requested", type="http_json",
+                  depends_on_tool="browser.select" if access != "standard" else None,
+                  params={"url": f"{self.base}/api/employees?email={email}", "expect": {"items.0.access_level": access}}),
             Check(id="c2", description="Roster has exactly one active row for the employee", type="csv_has_row",
                   params={"path": "data/team_roster.csv", "match": {"email": email, "department": dept, "status": "active"}, "count": 1}),
             Check(id="c3", description="Welcome document exists and states the start date in full", type="file_contains",
@@ -402,7 +420,7 @@ class ScriptedBrain(Brain):
             d: Done = stop.value
             return Decision(kind="done", summary=d.summary, facts=d.facts or {}, skipped=d.skipped)
         except Fail as f:
-            return Decision(kind="failed", summary=str(f))
+            return Decision(kind="failed", summary=str(f), final=f.final)
         if isinstance(nxt, Ask):
             return Decision(kind="ask", question=nxt.question)
         return Decision(kind="act", action=nxt)

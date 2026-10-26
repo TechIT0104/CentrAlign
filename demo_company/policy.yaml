@@ -37,13 +37,11 @@ rules:
     action: approve
     reason: "Admin or finance access is privileged and needs explicit human approval."
 
-  - id: deactivate-account
-    when: { tool: "browser.click", preview_match: "(?i)deactivate" }
-    action: approve
-    reason: "Deactivating an account revokes all access and needs human approval."
+  # Account deactivation is deliberately NOT gated by button text here: see request_rules below, which
+  # holds however the button is labelled and shows the reviewer the real request, in a single approval.
 
 # Rules above match what a tool call *says* it does. These match what the browser actually *sends*,
-# so they still hold if a button is renamed, moved or scripted. Defence in depth: the strongest rule wins.
+# so they still hold if a button is renamed, moved or scripted.
 request_default: auto
 request_rules:
   - id: request-external-host

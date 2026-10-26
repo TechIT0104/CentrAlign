@@ -13,6 +13,7 @@ import secrets
 import sqlite3
 import threading
 import time
+from datetime import date, timedelta
 from pathlib import Path
 
 from fastapi import FastAPI, Form, Header, HTTPException, Request
@@ -39,6 +40,15 @@ SEED = [
 ]
 
 
+def upcoming_hires() -> list[tuple]:
+    """Two people whose start dates are always a few days away, so reminder-style tasks have real targets."""
+    d = date.today()
+    return [
+        ("Noah Fischer", "noah.fischer@acme.test", "Engineering", (d + timedelta(days=3)).isoformat(), "standard", "Anita Rao", "active"),
+        ("Isha Menon", "isha.menon@acme.test", "Design", (d + timedelta(days=5)).isoformat(), "standard", "Sam Okafor", "active"),
+    ]
+
+
 def db() -> sqlite3.Connection:
     c = sqlite3.connect(DB_PATH, timeout=10)
     c.row_factory = sqlite3.Row
@@ -55,7 +65,7 @@ def reset_db() -> None:
         c.executemany(
             "INSERT INTO employees(full_name,email,department,start_date,access_level,manager,status,created_at)"
             " VALUES (?,?,?,?,?,?,?,?)",
-            [(*row, time.time()) for row in SEED],
+            [(*row, time.time()) for row in [*SEED, *upcoming_hires()]],
         )
     sessions.clear()
     chaos.clear()
@@ -162,17 +172,24 @@ def directory(request: Request, q: str = "", msg: str = ""):
 def new_form(request: Request):
     if (r := auth(request)) is not None:
         return r
+    if chaos.get("maintenance_once", 0) > 0:  # transient outage of the form itself
+        chaos["maintenance_once"] -= 1
+        return HTMLResponse("<h1>503 Service Unavailable</h1><p>The HR forms service is restarting. Try again in a moment.</p>", status_code=503)
     label = "Add to directory" if chaos.get("rename_button") else "Create employee"
+    name_field = ('<label for="n">Legal name</label><input id="n" name="legal_name">' if chaos.get("shuffle_fields")
+                  else '<label for="n">Full name</label><input id="n" name="full_name">')
+    extra = ('<label for="t">Employment type</label><select id="t" name="employment_type"><option value="">-- choose --</option>'
+             '<option>Full-time</option><option>Contractor</option></select>') if chaos.get("require_employment_type") else ""
     dept = "".join(f"<option>{d}</option>" for d in DEPARTMENTS)
     acc = "".join(f"<option>{a}</option>" for a in ACCESS)
     return page(
         f"""<h1>New employee</h1><form method="post" action="/employees">
-<label for="n">Full name</label><input id="n" name="full_name">
+{name_field}
 <label for="e">Work email</label><input id="e" name="email">
 <label for="d">Department</label><select id="d" name="department">{dept}</select>
 <label for="s">Start date</label><input id="s" name="start_date" type="date">
 <label for="a">Access level</label><select id="a" name="access_level">{acc}</select>
-<label for="m">Manager (optional)</label><input id="m" name="manager">
+{extra}<label for="m">Manager (optional)</label><input id="m" name="manager">
 <br><button type="submit">{label}</button></form>"""
     )
 
@@ -181,14 +198,17 @@ def new_form(request: Request):
 async def create(
     request: Request,
     full_name: str = Form(""),
+    legal_name: str = Form(""),
     email: str = Form(""),
     department: str = Form(""),
     start_date: str = Form(""),
     access_level: str = Form("standard"),
     manager: str = Form(""),
+    employment_type: str = Form(""),
 ):
     if (r := auth(request)) is not None:
         return r
+    full_name = full_name or legal_name
     if chaos.get("slow_create"):
         await asyncio.sleep(float(chaos["slow_create"]))
     if chaos.get("flaky_create", 0) > 0:
@@ -196,6 +216,14 @@ async def create(
         return HTMLResponse("<h1>500 Internal Server Error</h1><p>Upstream HR service unavailable.</p>", status_code=500)
     if not (full_name.strip() and "@" in email and start_date):
         return page('<h1>New employee</h1><p class="error">Name, valid email and start date are required.</p>')
+    if chaos.get("require_employment_type") and not employment_type:
+        return page('<h1>New employee</h1><p class="error">Employment type is required.</p>')
+    if chaos.get("weekday_only"):
+        try:
+            if date.fromisoformat(start_date).weekday() >= 5:
+                return page('<h1>New employee</h1><p class="error">Start date must be a weekday (Monday to Friday).</p>')
+        except ValueError:
+            return page('<h1>New employee</h1><p class="error">Start date is not a valid date.</p>')
     try:
         with db() as c:
             cur = c.execute(
@@ -227,8 +255,40 @@ def detail(request: Request, emp_id: int, msg: str = ""):
         f"""<h1>{html.escape(e['full_name'])}</h1>{flash}<table>
 <tr><th>Email</th><td>{html.escape(e['email'])}</td></tr><tr><th>Department</th><td>{e['department']}</td></tr>
 <tr><th>Start date</th><td>{e['start_date']}</td></tr><tr><th>Access level</th><td>{e['access_level']}</td></tr>
-<tr><th>Manager</th><td>{html.escape(e['manager'] or '-')}</td></tr><tr><th>Status</th><td>{e['status']}</td></tr></table>{action}"""
+<tr><th>Manager</th><td>{html.escape(e['manager'] or '-')}</td></tr><tr><th>Status</th><td>{e['status']}</td></tr></table>
+<p><a href="/employees/{emp_id}/edit">Edit employee</a></p>{action}"""
     )
+
+
+@app.get("/employees/{emp_id}/edit", response_class=HTMLResponse)
+def edit_form(request: Request, emp_id: int):
+    if (r := auth(request)) is not None:
+        return r
+    with db() as c:
+        e = c.execute("SELECT * FROM employees WHERE id=?", (emp_id,)).fetchone()
+    if not e:
+        return page("<h1>Not found</h1>")
+    dept = "".join(f"<option{' selected' if d == e['department'] else ''}>{d}</option>" for d in DEPARTMENTS)
+    acc = "".join(f"<option{' selected' if a == e['access_level'] else ''}>{a}</option>" for a in ACCESS)
+    return page(
+        f"""<h1>Edit {html.escape(e['full_name'])}</h1><form method="post" action="/employees/{emp_id}/edit">
+<label for="d">Department</label><select id="d" name="department">{dept}</select>
+<label for="a">Access level</label><select id="a" name="access_level">{acc}</select>
+<label for="s">Start date</label><input id="s" name="start_date" type="date" value="{e['start_date']}">
+<label for="m">Manager</label><input id="m" name="manager" value="{html.escape(e['manager'] or '')}">
+<br><button type="submit">Save changes</button></form>"""
+    )
+
+
+@app.post("/employees/{emp_id}/edit")
+def edit(request: Request, emp_id: int, department: str = Form(""), access_level: str = Form("standard"),
+         start_date: str = Form(""), manager: str = Form("")):
+    if (r := auth(request)) is not None:
+        return r
+    with db() as c:
+        c.execute("UPDATE employees SET department=?, access_level=?, start_date=?, manager=? WHERE id=?",
+                  (department, access_level, start_date, manager.strip(), emp_id))
+    return RedirectResponse(f"/employees/{emp_id}?msg=Employee+updated", status_code=303)
 
 
 @app.post("/employees/{emp_id}/deactivate")

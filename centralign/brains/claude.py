@@ -22,6 +22,13 @@ class BrainError(Exception):
     pass
 
 
+# USD per million tokens (input, output). Estimates for reporting; the invoice is the source of truth.
+PRICES = {
+    "claude-opus-5-5": (4.0, 20.0), "claude-opus-5": (5.0, 25.0), "claude-sonnet-5-5": (2.0, 10.0),
+    "claude-sonnet-5": (2.0, 10.0), "claude-haiku-5-5": (0.10, 0.50), "claude-fable-5-1": (10.0, 50.0),
+}
+
+
 CHECK_DOC = """Acceptance check types (verified by independent code AFTER execution, never by you):
 - file_exists    {path | glob}
 - file_contains  {path | glob, text}                       (glob: first matching file must contain the text)
@@ -111,7 +118,11 @@ CONTROL_TOOLS = [
     {
         "name": "step_failed",
         "description": "Declare the current step cannot be completed after trying reasonable alternatives.",
-        "input_schema": {"type": "object", "properties": {"reason": {"type": "string"}}, "required": ["reason"]},
+        "input_schema": {"type": "object", "properties": {
+            "reason": {"type": "string"},
+            "final": {"type": "boolean", "description": "True only if a human told you to stop or the task is impossible; "
+                                                        "then the run ends instead of being replanned."}},
+            "required": ["reason"]},
     },
     {
         "name": "ask_human",
@@ -142,6 +153,10 @@ class ClaudeBrain(Brain):
                 tool_choice={"type": "auto", "disable_parallel_tool_use": True},
                 output_config={"effort": effort},
             )
+            u = getattr(resp, "usage", None)
+            if u is not None:
+                self.add_usage(getattr(u, "input_tokens", 0) or 0, getattr(u, "output_tokens", 0) or 0,
+                               getattr(u, "cache_read_input_tokens", 0) or 0, getattr(u, "cache_creation_input_tokens", 0) or 0)
             if resp.stop_reason == "refusal":
                 raise BrainError(f"model declined the request ({getattr(resp.stop_details, 'category', None)})")
             text = "".join(b.text for b in resp.content if b.type == "text")
@@ -163,6 +178,14 @@ class ClaudeBrain(Brain):
             extra = f" -> {done[s.id].summary}" if s.id in done else ""
             lines.append(f"{i + 1}. [{mark}] {s.description} (expect: {s.expected}){extra}")
         return "\n".join(lines)
+
+    def cost(self, usage: dict[str, int]) -> float | None:
+        price = PRICES.get(self.model)
+        if not price or not usage:
+            return None
+        # cache reads bill at ~10% and cache writes at ~125% of the input price
+        billed_in = usage.get("input", 0) + 0.1 * usage.get("cache_read", 0) + 1.25 * usage.get("cache_write", 0)
+        return round(billed_in * price[0] / 1e6 + usage.get("output", 0) * price[1] / 1e6, 4)
 
     # ------------------------------------------------------------------ planning
     def plan(self, req: PlanRequest) -> Plan:
@@ -236,7 +259,7 @@ class ClaudeBrain(Brain):
         if name == "step_done":
             return Decision(kind="done", summary=args.get("summary", ""), facts=args.get("facts") or {}, skipped=bool(args.get("skipped")))
         if name == "step_failed":
-            return Decision(kind="failed", summary=args.get("reason", ""))
+            return Decision(kind="failed", summary=args.get("reason", ""), final=bool(args.get("final")))
         if name == "ask_human":
             return Decision(kind="ask", question=args.get("question", ""))
         return Decision(kind="act", action=Action(tool=name, args=args, thought=thought))

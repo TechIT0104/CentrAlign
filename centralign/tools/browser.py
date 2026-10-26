@@ -11,6 +11,7 @@ import json
 import queue
 import re
 import threading
+import time
 from concurrent.futures import Future
 from pathlib import Path
 from typing import Any, Callable
@@ -41,6 +42,23 @@ READ_JS = """() => {
   return {url: location.href, title: document.title, text: document.body.innerText.slice(0, 2500), elements: out};
 }"""
 
+# Pre-navigation gate: a form submit is paused while Python consults the policy. If blocked the page never
+# navigates, so its DOM and typed values survive and an approved action can simply be repeated. (Known
+# limitation: re-submitting via form.submit() omits the submitter button's own name/value.)
+GATE_JS = """
+document.addEventListener('submit', async (e) => {
+  if (e.defaultPrevented) return;
+  const f = e.target, sub = e.submitter;
+  const method = ((sub && sub.getAttribute('formmethod')) || f.method || 'get').toUpperCase();
+  if (method === 'GET') return;
+  e.preventDefault();
+  const url = new URL((sub && sub.getAttribute('formaction')) || f.getAttribute('action') || location.href, location.href).href;
+  let ok = false;
+  try { ok = await window.__cgGate(method, url); } catch (err) { ok = false; }
+  if (ok) f.submit();
+}, true);
+"""
+
 DESCRIBE_JS = """(e) => {
   const label = (e.labels && e.labels[0] ? e.labels[0].innerText : (e.getAttribute('aria-label') || '')).trim();
   return [e.tagName.toLowerCase(), label, e.name || '', (e.innerText || '').trim().slice(0, 80)].filter(Boolean).join(' | ');
@@ -58,6 +76,7 @@ class BrowserSession:
         self.gate = None  # (method, url) -> policy Verdict; set per tool call by the runtime
         self.allowed: set[str] = set()  # one-shot grants for requests a human approved
         self.blocked: list[dict[str, str]] = []  # requests the gate stopped during the current action
+        self.inflight: set[int] = set()  # main-frame document requests started but not finished
         self._jobs: queue.Queue = queue.Queue()
         self._ready = threading.Event()
         self._boot_error: Exception | None = None
@@ -81,6 +100,8 @@ class BrowserSession:
                 ctx = browser.new_context(**kwargs)
                 ctx.set_default_timeout(6000)
                 ctx.route("**/*", self._route)
+                ctx.expose_function("__cgGate", self._js_gate)
+                ctx.add_init_script(GATE_JS)
                 page = ctx.new_page()
                 page.on(
                     "response",
@@ -88,6 +109,10 @@ class BrowserSession:
                     if r.request.resource_type == "document" and r.frame == page.main_frame
                     else None,
                 )
+                page.on("request", lambda r: self.inflight.add(id(r))
+                        if r.resource_type == "document" and r.frame == page.main_frame else None)
+                for ev in ("requestfinished", "requestfailed"):
+                    page.on(ev, lambda r: self.inflight.discard(id(r)))
                 if meta.exists():
                     try:
                         page.goto(json.loads(meta.read_text())["url"], timeout=10000)
@@ -118,10 +143,36 @@ class BrowserSession:
     def close(self) -> None:
         self._jobs.put(None)
 
+    def settle(self, page) -> None:
+        """Wait for whatever a click set in motion. Playwright's own click auto-wait hangs after a policy
+        block (the 204'd navigation never 'commits'), so we track main-frame document requests ourselves."""
+        t0 = time.time()
+        while time.time() - t0 < 12:
+            page.wait_for_timeout(60)
+            if self.blocked:
+                return
+            if not self.inflight and time.time() - t0 >= 0.35:
+                break
+        try:
+            page.wait_for_load_state("load", timeout=5000)
+        except Exception:
+            pass
+
     # -- effect-level policy ------------------------------------------------
     def allow(self, method: str, url: str) -> None:
         """Grant one human-approved request (consumed when it is sent)."""
         self.allowed.add(f"{method.upper()} {url}")
+
+    def _js_gate(self, method: str, url: str) -> bool:
+        """Called from the page before a form submits. True = let it go; False = hold it for a human."""
+        if self.gate is None or f"{method} {url}" in self.allowed:  # an approved grant is consumed by _route
+            return True
+        verdict = self.gate(method, url)
+        if verdict.verdict == "auto":
+            return True
+        self.blocked.append({"method": method, "url": url, "verdict": verdict.verdict,
+                             "rule": verdict.rule, "reason": verdict.reason})
+        return False
 
     def _route(self, route, request) -> None:
         """Every request the page sends passes the policy gate, whatever UI element triggered it."""
@@ -137,7 +188,13 @@ class BrowserSession:
             return route.continue_()
         self.blocked.append({"method": method, "url": request.url, "verdict": verdict.verdict,
                              "rule": verdict.rule, "reason": verdict.reason})
-        route.abort()
+        if request.resource_type == "document":
+            # 204 No Content makes the browser stay on the current page with its DOM and any typed form
+            # values intact, so an approved action can simply be repeated. (abort() would replace the
+            # page with an error page and lose both.)
+            route.fulfill(status=204, body="")
+        else:
+            route.abort()
 
     # -- helpers executed on the worker thread ------------------------
     def snapshot_and_save(self, page, label: str) -> str:
@@ -287,10 +344,12 @@ class Click(_BrowserTool):
         sess = self._sess(ctx)
 
         def click(page):
+            sess.blocked = []
             try:
-                _locate(page, args["target"]).click(timeout=5000)
+                _locate(page, args["target"]).click(timeout=5000, no_wait_after=True)
             except Exception as e:
                 return self._element_failure(str(args["target"]), e)
+            sess.settle(page)
             return _page_obs(sess, page, "click", f"clicked {args['target']}")
 
         return sess.call(click)

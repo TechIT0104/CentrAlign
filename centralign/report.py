@@ -23,7 +23,7 @@ def build_report(rt: "Runtime", run_id: str) -> dict[str, Any]:
     steps: list[dict[str, Any]] = []
     current: dict[str, Any] | None = None
     humans: list[dict[str, Any]] = []
-    lessons, anomalies, memory = [], [], {}
+    lessons, anomalies, memory, usage, cost = [], [], {}, {}, None
     started = events[0]["ts"] if events else time.time()
     ended = events[-1]["ts"] if events else started
     for e in events:
@@ -46,6 +46,8 @@ def build_report(rt: "Runtime", run_id: str) -> dict[str, Any]:
             humans.append({"type": "question", "question": d["question"], "why": d.get("why", "")})
         elif t == "intervention.resolved" and d["kind"] == "question":
             humans[-1]["answer"] = d["response"].get("answer", "") if humans else ""
+        elif t == "run.finished":
+            usage, cost = d.get("usage") or {}, d.get("cost_usd")
         elif t == "lesson.saved":
             lessons.append(d["lesson"])
         elif t == "anomaly":
@@ -58,7 +60,7 @@ def build_report(rt: "Runtime", run_id: str) -> dict[str, Any]:
         "summary": state.summary, "duration_s": round(ended - started, 1), "plan": plan, "steps": steps,
         "checks": [c.model_dump() for c in state.checks], "human_interactions": humans, "recoveries": state.recoveries,
         "anomalies": anomalies, "lessons": lessons, "memory_used": memory, "audit": {"intact": ok, "detail": audit, "events": len(events)},
-        "replans": state.replans,
+        "replans": state.replans, "usage": usage, "cost_usd": cost,
     }
 
 
@@ -69,7 +71,8 @@ def _args(a: dict) -> str:
 
 def render_markdown(r: dict[str, Any]) -> str:
     L = [f"# Operator report: {r['run_id']}", "", f"**Request:** {r['goal']}", "", f"**Outcome:** {r['outcome']}", "",
-         f"{r['summary']}", "", f"_Duration {r['duration_s']}s | replans {r['replans']} | audit log: {r['audit']['detail']} ({r['audit']['events']} events)_", ""]
+         f"{r['summary']}", "", f"_Duration {r['duration_s']}s | replans {r['replans']} | audit log: {r['audit']['detail']} ({r['audit']['events']} events)"
+         + (f" | model tokens {r['usage']['input'] + r['usage']['output']} (~${r['cost_usd']})" if r.get("usage") and r["usage"].get("input") is not None else "") + "_", ""]
     if r["plan"]:
         L += ["## Understanding", r["plan"]["understanding"], ""]
         if r["plan"]["assumptions"]:

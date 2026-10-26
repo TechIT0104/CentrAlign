@@ -3,6 +3,7 @@ state, audit) is deterministic code, so a different model, or the offline script
 can be swapped in without touching the safety-critical parts."""
 from __future__ import annotations
 
+import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
@@ -48,8 +49,31 @@ class StepContext:
         return out
 
 
+_scope = threading.local()  # which run the current thread is working for (set by the runtime)
+
+
 class Brain(ABC):
     name = "brain"
+
+    # -- usage accounting: tokens per run, so an eval can report what each task cost --------------
+    def set_scope(self, run_id: str | None) -> None:
+        _scope.run_id = run_id
+
+    def add_usage(self, input_tokens: int, output_tokens: int, cache_read: int = 0, cache_write: int = 0) -> None:
+        book = self.__dict__.setdefault("_usage", {})
+        u = book.setdefault(getattr(_scope, "run_id", None) or "-", {"calls": 0, "input": 0, "output": 0, "cache_read": 0, "cache_write": 0})
+        u["calls"] += 1
+        u["input"] += input_tokens
+        u["output"] += output_tokens
+        u["cache_read"] += cache_read
+        u["cache_write"] += cache_write
+
+    def usage_for(self, run_id: str) -> dict[str, int]:
+        return dict(self.__dict__.get("_usage", {}).get(run_id, {}))
+
+    def cost(self, usage: dict[str, int]) -> float | None:
+        """Estimated USD for a usage dict; None when the brain is free or the model's price is unknown."""
+        return None
 
     @abstractmethod
     def plan(self, req: PlanRequest) -> Plan: ...

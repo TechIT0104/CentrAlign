@@ -157,6 +157,37 @@ def cmd_resolve(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_eval(args: argparse.Namespace) -> int:
+    """Run tasks x failure conditions x repeats and report success rate, effort, human load and cost."""
+    from datetime import date
+    from pathlib import Path
+
+    from .evals import load_tasks, render_markdown, run_eval, save, summarize
+
+    rt = build_runtime(args)
+    proc = prepare_demo(rt.s, fresh=True)
+    spec = load_tasks(Path(args.tasks))
+    conditions = [c.strip() for c in args.conditions.split(",")] if args.conditions is not None else None
+
+    def progress(r) -> None:
+        tag = paint("g", "PASS") if r.success else paint("y", "skip") if r.status == "skipped" else paint("r", "FAIL")
+        print(f"  {tag}  {r.task:<26} {r.condition:<8} -> {r.status:<22} actions={r.actions} human={r.interventions} replans={r.replans}"
+              + (f" truth={r.ground_truth}" if r.ground_truth != "-" else "") + (f"  {r.note}" if r.note else ""), flush=True)
+
+    try:
+        results = run_eval(rt, spec, conditions, args.repeat, args.only, progress)
+    finally:
+        if proc:
+            proc.terminate()
+    meta = {"brain": rt.brain.name, "model": getattr(rt.brain, "model", None), "date": str(date.today()), "repeats": args.repeat,
+            "conditions": conditions if conditions is not None else spec.get("conditions")}
+    summary = summarize(results)
+    path = save(rt, results, summary, meta)
+    print("\n" + render_markdown(results, summary, meta))
+    print(f"saved {path}")
+    return 0 if summary["successes"] == summary["runs"] else 1
+
+
 def cmd_schedule(args: argparse.Namespace) -> int:
     rt = Runtime(Settings.load(brain="scripted"))
     if args.sub == "add":
@@ -248,6 +279,15 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("text", nargs="?", default="")
         p.add_argument("--brain", choices=["claude", "scripted"])
         p.set_defaults(fn=cmd_resolve, action=name)
+
+    p = sub.add_parser("eval", help="measure reliability: tasks x failure conditions x repeats")
+    p.add_argument("--tasks", default="demo_company/eval_tasks.yaml")
+    p.add_argument("--conditions", help="override failure conditions, comma separated; '' = none (e.g. ',flaky,all')")
+    p.add_argument("--repeat", type=int, default=1, help="runs per task/condition (models are non-deterministic)")
+    p.add_argument("--only", help="run tasks whose id contains this text")
+    p.add_argument("--brain", choices=["claude", "scripted"])
+    p.add_argument("--headed", action="store_true")
+    p.set_defaults(fn=cmd_eval)
 
     p = sub.add_parser("schedule", help="manage recurring tasks")
     ss = p.add_subparsers(dest="sub", required=True)

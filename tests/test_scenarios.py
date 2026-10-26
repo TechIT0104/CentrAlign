@@ -73,7 +73,8 @@ def test_elevated_access_requires_approval_and_denial_is_respected(rt, fresh):
     assert not emps or emps[0]["access_level"] != "admin"
     assert events(rt, rid, "approval.denied")
     # and the verifier flags that the requested outcome was not met
-    assert state.status in ("completed_with_issues", "failed")
+    assert state.status == "completed"  # the human's decision stands; the privilege check is skipped, not faked
+    assert {c.check_id: c.status for c in state.checks}["c1b"] == "skipped"
 
 
 def test_declined_email_skips_dependent_check_and_is_learned(rt, fresh):
@@ -87,7 +88,8 @@ def test_declined_email_skips_dependent_check_and_is_learned(rt, fresh):
 def test_duplicate_asks_human_and_stop_creates_nothing(rt, fresh):
     before = len(hr(fresh, q="rahul"))
     state, rid = run(rt, "Onboard Rahul Verma into Sales, starting 2026-11-02", answers=["stop"])
-    assert state.status == "failed"
+    assert state.status == "failed" and state.replans == 0  # a human's "stop" is final: not replanned, not re-asked
+    assert len(events(rt, rid, "intervention.requested")) == 1
     assert len(hr(fresh, q="rahul")) == before == 1
     q = events(rt, rid, "intervention.requested")
     assert any("already has a record" in (d.get("question") or "") for d in q)
@@ -113,7 +115,8 @@ def test_offboarding_needs_approval_then_verifies(rt, fresh):
     assert state.status == "completed", state.summary
     assert hr(fresh, "sam.okafor@acme.test")[0]["status"] == "inactive"
     assert [r["status"] for r in roster(fresh) if r["email"] == "sam.okafor@acme.test"] == ["inactive"]
-    assert "deactivate-account" in json.dumps(events(rt, rid, "intervention.requested"))
+    asked = events(rt, rid, "intervention.requested")
+    assert [a["rule"] for a in asked if a["kind"] == "approval"] == ["request-deactivate"]  # exactly one approval, on the real effect
 
 
 def test_offboarding_denied_leaves_account_untouched(rt, fresh):
@@ -189,7 +192,7 @@ def test_replan_cannot_weaken_the_definition_of_done(fresh):
     rt = Runtime(fresh, brain=WeakeningBrain(fresh.acmehr_url))
     state = rt.run("Onboard Priya Sharma into Engineering, starting 2026-11-02")
     assert state.status == "completed_with_issues" and state.replans >= 1
-    assert len(state.frozen_checks) == 5 and {c.check_id for c in state.checks} >= {"c1", "c2", "c3", "c4", "c5"}
+    assert len(state.frozen_checks) == 6 and {c.check_id for c in state.checks} >= {"c1", "c1b", "c2", "c3", "c4", "c5"}
 
 
 def test_independent_checks_are_merged_and_deduplicated(fresh):
@@ -209,7 +212,7 @@ def test_approval_follows_the_effect_not_the_button_label(rt, fresh):
     state, rid = run(rt, "Offboard Sam Okafor", approve=False)
     reqs = events(rt, rid, "intervention.requested")
     assert any(r.get("rule") == "request-deactivate" for r in reqs), reqs
-    assert not any(r.get("rule") == "deactivate-account" for r in reqs)  # the label rule did NOT fire
+    assert len([r for r in reqs if r["kind"] == "approval"]) == 1  # one prompt, however the button is labelled
     assert events(rt, rid, "action.blocked")[0]["request"].endswith("/deactivate")
     assert hr(fresh, "sam.okafor@acme.test")[0]["status"] == "active"
 
@@ -221,3 +224,34 @@ def test_approved_request_is_released_exactly_once(rt, fresh):
     assert hr(fresh, "sam.okafor@acme.test")[0]["status"] == "inactive"
     granted = [e for e in events(rt, rid, "approval.granted")]
     assert len(granted) == 1 and "sends POST" in granted[0]["preview"]
+
+
+def test_unseen_failures_stop_safely_instead_of_faking_success(rt, fresh):
+    """The offline brain has no recovery for a newly required form field. It must not claim success."""
+    httpx.post(f"{fresh.acmehr_url}/__admin/chaos", json=chaos_from_names("newfield"))
+    answers = []
+
+    def on_wait(r, rid, iv):
+        answers.append(iv["payload"]["purpose"])
+        r.resolve(iv["id"], answer="abort")
+
+    state = rt.run("Onboard Priya Sharma into Engineering, starting 2026-11-02", on_wait=on_wait)
+    assert state.status == "failed" and answers == ["escalation"]
+    assert not hr(fresh, "priya.sharma@acme.test")
+
+
+def test_form_outage_is_recovered_by_replanning(rt, fresh):
+    httpx.post(f"{fresh.acmehr_url}/__admin/chaos", json=chaos_from_names("outage"))
+    state, rid = run(rt, "Onboard Priya Sharma into Engineering, starting 2026-11-02")
+    assert state.status == "completed" and state.replans >= 1
+    assert len(hr(fresh, "priya.sharma@acme.test")) == 1
+
+
+def test_offboarding_survives_session_expiry_after_the_save_without_double_acting(rt, fresh):
+    """The session dies on the redirect AFTER the deactivation went through. The operator must check the
+    record instead of assuming failure, and must not ask for (or perform) a second deactivation."""
+    httpx.post(f"{fresh.acmehr_url}/__admin/chaos", json=chaos_from_names("expiry"))
+    state, rid = run(rt, "Offboard Sam Okafor")
+    assert state.status == "completed", state.summary
+    assert hr(fresh, "sam.okafor@acme.test")[0]["status"] == "inactive"
+    assert len(events(rt, rid, "approval.granted")) == 1 and state.replans == 0

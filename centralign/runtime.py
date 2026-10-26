@@ -127,7 +127,12 @@ class Runtime:
             # Cross-process mutual exclusion: only the lease holder may drive a run.
             if state.terminal or state.waiting or not self.store.claim_lease(run_id, self.owner, self.lease_ttl):
                 return state
+            state = self.store.load_run(run_id)  # re-read under the lease: another worker may have just finished it
+            if state.terminal or state.waiting:
+                self.store.release_lease(run_id, self.owner)
+                return state
             rec = self._rec(run_id)
+            self.brain.set_scope(run_id)
             try:
                 while not state.terminal and not state.waiting:
                     if not self.store.claim_lease(run_id, self.owner, self.lease_ttl):  # renew; lost it => stop at once
@@ -278,7 +283,7 @@ class Runtime:
             if state.step_idx >= len(plan.steps):
                 state.phase = "verifying"
         elif decision.kind == "failed":
-            self._step_failed(run_id, state, rec, decision.summary or "step failed")
+            self._step_failed(run_id, state, rec, decision.summary or "step failed", final=decision.final)
         elif decision.kind == "ask":
             iid = self.store.create_intervention(run_id, "question", {"purpose": "ask_human", "question": decision.question, "step": step.id})
             state.pending_intervention, state.status = iid, "waiting_human"
@@ -293,9 +298,12 @@ class Runtime:
         return len(last) == 3 and not any(h.observation.ok for h in last) and \
             len({(h.action.tool, str(sorted(h.action.args.items()))) for h in last}) == 1
 
-    def _step_failed(self, run_id: str, state: RunState, rec: Recorder, reason: str) -> None:
+    def _step_failed(self, run_id: str, state: RunState, rec: Recorder, reason: str, final: bool = False) -> None:
         step = state.plan.steps[state.step_idx]  # type: ignore[union-attr]
-        rec("step.failed", step=step.id, reason=reason)
+        rec("step.failed", step=step.id, reason=reason, final=final)
+        if final:  # a human said stop: honour it; retrying or replanning would override their decision
+            state.step_results.append(StepResult(step_id=step.id, kind=step.kind, status="failed", summary=reason, actions=len(state.history)))
+            return self._finish(run_id, state, rec, "failed", f"Stopped at step '{step.description}': {reason}")
         if state.replans < self.s.max_replans:
             state.recoveries.append(f"Step '{step.description}' failed ({reason}); replanned the remaining work.")
             return self._replan(run_id, state, rec, f"step '{step.description}' failed: {reason}")
@@ -457,7 +465,8 @@ class Runtime:
         self.store.add_episode(run_id, state.goal, status, lessons)
         for lesson in lessons:
             rec("lesson.saved", lesson=lesson)
-        rec("run.finished", status=status, summary=summary)
+        usage = self.brain.usage_for(run_id)
+        rec("run.finished", status=status, summary=summary, usage=usage, cost_usd=self.brain.cost(usage))
         from .report import write_report
 
         self.store.save_run(run_id, state)
