@@ -4,115 +4,249 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>CentrAlign Operator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,300;1,9..144,400;1,9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#f5f6f8;--card:#fff;--ink:#17191c;--mute:#667085;--line:#e4e7ec;--accent:#2457d6;--ok:#12805c;--warn:#b25e09;--bad:#c4321c;--okbg:#e6f6ef;--warnbg:#fff4e0;--badbg:#fdeceb;--code:#f0f2f5}
-@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--card:#171a20;--ink:#e8eaee;--mute:#98a2b3;--line:#2a2f38;--accent:#7aa2ff;--ok:#4cc79a;--warn:#f0b35a;--bad:#ff8a78;--okbg:#10291f;--warnbg:#2d2210;--badbg:#341a17;--code:#20242c}}
-*{box-sizing:border-box}body{margin:0;font:14px/1.5 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--ink)}
-header{display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid var(--line);background:var(--card)}
-header h1{font-size:16px;margin:0}.badge{font-size:12px;padding:2px 8px;border-radius:99px;background:var(--code);color:var(--mute)}
-.layout{display:grid;grid-template-columns:320px 1fr;gap:16px;padding:16px 20px;max-width:1300px;margin:0 auto}
-@media(max-width:860px){.layout{grid-template-columns:1fr;padding:12px 16px}}
-.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:14px}
-h2{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);margin:0 0 10px}
-textarea,input[type=text]{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit}
-textarea{min-height:76px;resize:vertical}
-button{font:inherit;padding:7px 14px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
-button.primary{background:var(--accent);border-color:var(--accent);color:#fff}button.ok{background:var(--ok);border-color:var(--ok);color:#fff}button.bad{color:var(--bad);border-color:var(--bad)}
-button:disabled{opacity:.5;cursor:default}.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center}
-.chip{font-size:12px;padding:3px 9px;border:1px solid var(--line);border-radius:99px;background:var(--bg);cursor:pointer;color:var(--mute)}
-.chip:hover{color:var(--ink)}
-.run{padding:8px 10px;border-radius:8px;cursor:pointer;border:1px solid transparent}.run:hover{background:var(--bg)}.run.sel{border-color:var(--accent);background:var(--bg)}
-.run small{display:block;color:var(--mute)}
-.pill{font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;text-transform:uppercase;letter-spacing:.03em}
-.pill.completed{background:var(--okbg);color:var(--ok)}.pill.running{background:var(--code);color:var(--accent)}
-.pill.waiting_approval,.pill.waiting_human,.pill.completed_with_issues{background:var(--warnbg);color:var(--warn)}.pill.failed,.pill.cancelled{background:var(--badbg);color:var(--bad)}
-.need{border-color:var(--warn);background:var(--warnbg)}.need h2{color:var(--warn)}
-.steps{list-style:none;margin:0;padding:0}.steps li{padding:5px 0;display:flex;gap:10px;color:var(--mute)}.steps li.cur{color:var(--ink);font-weight:600}.steps li.done{color:var(--ok)}
-.ev{display:grid;grid-template-columns:18px 1fr;gap:6px;padding:4px 0;border-bottom:1px dashed var(--line);font-size:13px}
-.ev code{background:var(--code);padding:1px 5px;border-radius:4px;font-size:12px}.ev .m{color:var(--mute)}
-.ev.step{font-weight:600;margin-top:8px;border-bottom:none}.ev.err{color:var(--bad)}.ev.warn{color:var(--warn)}.ev.good{color:var(--ok)}
-table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top;font-size:13px}
-.gal{display:flex;gap:10px;flex-wrap:wrap}.gal img{width:150px;border:1px solid var(--line);border-radius:6px;cursor:zoom-in}
-#modal{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center;padding:20px}#modal img{max-width:96%;max-height:96%;border-radius:8px}
-.empty{color:var(--mute);padding:30px;text-align:center}
+:root{
+  --background:39 58% 96%;--foreground:29 17% 14%;--card:0 0% 100%;
+  --primary:29 17% 14%;--primary-foreground:39 58% 96%;--secondary:26 56% 92%;
+  --muted:37 33% 87%;--muted-foreground:32 9% 44%;
+  --accent:262 84% 58%;--accent-foreground:0 0% 100%;--accent-soft:262 60% 95%;--accent-text:262 70% 45%;
+  --gold:36 88% 46%;--surface-warm:36 67% 98%;--destructive:0 72% 52%;--border:37 33% 87%;
+  --ok:152 45% 32%;--ok-bg:152 45% 94%;
+  --glass:255 255 255;--glass-a:.8;
+  --radius:.75rem;
+  --shadow-soft:0 1px 2px hsl(29 17% 14% / .04),0 8px 24px -12px hsl(29 17% 14% / .10);
+  --shadow-lift:0 2px 4px hsl(29 17% 14% / .05),0 24px 48px -20px hsl(29 17% 14% / .18);
+  --sans:"Inter",ui-sans-serif,system-ui,sans-serif;--serif:"Fraunces",Georgia,serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root{
+  --background:0 0% 6.5%;--foreground:0 0% 98%;--card:0 0% 17%;--muted:0 0% 21%;--muted-foreground:0 0% 64%;
+  --secondary:0 0% 20%;--border:0 0% 24%;--primary:0 0% 98%;--primary-foreground:0 0% 9%;
+  --accent:262 84% 64%;--accent-soft:262 40% 26%;--accent-text:262 90% 84%;--surface-warm:0 0% 12%;
+  --ok:152 50% 70%;--ok-bg:152 30% 16%;--glass:36 36 36;--glass-a:.8;
+  --shadow-soft:0 1px 2px #0006,0 8px 24px -12px #000a;--shadow-lift:0 2px 4px #0006,0 24px 48px -20px #000c}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;font:14px/1.55 var(--sans);background:hsl(var(--background));color:hsl(var(--foreground));min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+.glow{position:fixed;left:50%;pointer-events:none;z-index:0;filter:blur(64px);animation:breathe 8s ease-in-out infinite}
+.glow.a{top:-10%;width:720px;height:460px;margin-left:-360px;border-radius:50%;background:hsl(var(--accent)/.10)}
+.glow.b{bottom:-22%;width:700px;height:420px;margin-left:-350px;border-radius:50%;background:radial-gradient(closest-side,hsl(var(--gold)/.12),transparent);animation-delay:-4s}
+@keyframes breathe{0%,100%{opacity:.75;transform:scale(1)}50%{opacity:1;transform:scale(1.06)}}
+@media (prefers-reduced-motion:reduce){.glow,.step.cur .dot{animation:none!important}.card,.btn,.chip,.run,.gal img{transition:none!important}}
+nav.top{position:sticky;top:0;z-index:20;height:64px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;background:hsl(var(--background)/.7);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);border-bottom:1px solid hsl(var(--border))}
+.wordmark{font-weight:600;letter-spacing:-.02em;font-size:18px}
+.pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;border:1px solid hsl(var(--border));background:rgb(var(--glass)/.75);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);padding:6px 14px;font-size:12px;color:hsl(var(--muted-foreground))}
+.pill:empty{display:none}
+.hero{position:relative;z-index:1;text-align:center;max-width:768px;margin:0 auto;padding:56px 16px 32px}
+.hero h1{margin:16px 0 0;font-weight:700;font-size:clamp(34px,6vw,64px);letter-spacing:-.045em;line-height:1.05}
+.hero h1 em{display:block;margin-top:6px;font-family:var(--serif);font-weight:300;font-style:italic;font-size:clamp(27px,5vw,52px);letter-spacing:-.02em;color:hsl(var(--foreground)/.8)}
+.hero p{margin:18px auto 0;font-size:17px;line-height:1.6;color:hsl(var(--foreground)/.75);max-width:600px}
+.layout{position:relative;z-index:1;display:grid;grid-template-columns:340px minmax(0,1fr);gap:20px;max-width:1200px;margin:0 auto;padding:8px 24px 64px;align-items:start}
+aside{display:flex;flex-direction:column;gap:16px;min-width:0}
+main{min-width:0;display:flex;flex-direction:column;gap:16px}
+@media (max-width:900px){.layout{grid-template-columns:1fr;padding:8px 16px 48px}aside{display:contents}.c-new{order:1}main{order:2}.c-rest{order:3}}
+.card{position:relative;border-radius:16px;border:1px solid hsl(var(--border));background:rgb(var(--glass)/var(--glass-a));-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);padding:20px;box-shadow:var(--shadow-soft);transition:transform .3s,box-shadow .3s,border-color .3s}
+.card::before{content:"";position:absolute;left:16px;right:16px;top:0;height:1px;background:linear-gradient(90deg,transparent,hsl(var(--accent)/.4),transparent)}
+.card:hover .tile{transform:rotate(-6deg)}
+h2,h3{margin:0;font-family:var(--serif);font-weight:600;letter-spacing:-.04em;line-height:1.08}
+.title{font-size:28px;margin:6px 0 0}
+.eyebrow{display:flex;align-items:center;gap:12px;margin:0 0 14px;font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.18em;color:hsl(var(--accent-text))}
+.eyebrow::before{content:"";width:32px;height:1px;background:hsl(var(--foreground)/.2);flex:none}
+.eyebrow small{margin-left:auto;font:400 11px var(--sans);text-transform:none;letter-spacing:0;color:hsl(var(--muted-foreground))}
+.tile{width:40px;height:40px;flex:none;border-radius:12px;border:1px solid hsl(var(--border));background:rgb(var(--glass)/1);display:grid;place-items:center;color:hsl(var(--accent-text));transition:transform .3s}
+.tile svg,.ic svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px}
+.btn{font:500 14px var(--sans);height:48px;padding:0 28px;border-radius:999px;border:1px solid transparent;cursor:pointer;transition:transform .2s,background .2s,box-shadow .2s;white-space:nowrap}
+.btn.sm{height:40px;padding:0 22px}
+.btn.primary{background:hsl(var(--foreground));color:hsl(var(--background))}
+.btn.primary:hover{transform:translateY(-2px);box-shadow:var(--shadow-lift)}
+.btn.secondary{border-color:hsl(var(--border));background:rgb(var(--glass)/.7);color:hsl(var(--foreground));-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)}
+.btn.secondary:hover{background:hsl(var(--card))}
+.btn.danger{background:transparent;color:hsl(var(--destructive));border-color:hsl(var(--destructive))}
+.btn.danger:hover{background:hsl(var(--destructive)/.08)}
+.btn:disabled{opacity:.5;cursor:default;transform:none}
+.btn:focus-visible,.chip:focus-visible,.run:focus-visible{outline:3px solid hsl(var(--accent)/.35);outline-offset:2px}
+textarea,input[type=text]{width:100%;font:inherit;color:hsl(var(--foreground));background:hsl(var(--surface-warm));border:1px solid hsl(var(--border));border-radius:12px;padding:10px 14px;outline:none;transition:box-shadow .2s,border-color .2s}
+textarea{min-height:84px;resize:vertical}
+textarea:focus,input[type=text]:focus{border-color:hsl(var(--accent));box-shadow:0 0 0 3px hsl(var(--accent)/.25)}
+.chip{font:400 12px var(--sans);padding:6px 12px;border-radius:999px;border:1px solid hsl(var(--border));background:rgb(var(--glass)/.7);color:hsl(var(--muted-foreground));cursor:pointer;transition:all .2s}
+.chip:hover{color:hsl(var(--foreground));background:hsl(var(--card))}
+.chip.on{background:hsl(var(--accent-soft));color:hsl(var(--accent-text));border-color:hsl(var(--accent)/.4)}
+.run{display:block;width:100%;text-align:left;padding:12px 14px;margin-top:8px;border-radius:12px;border:1px solid hsl(var(--border));background:rgb(var(--glass)/.6);color:inherit;font:inherit;cursor:pointer;transition:transform .3s,border-color .3s,box-shadow .3s}
+.run:hover{transform:translateY(-4px);border-color:hsl(var(--accent)/.4);box-shadow:var(--shadow-lift)}
+.run.sel{border-color:hsl(var(--accent)/.6)}
+.run small{display:block;margin-top:6px;color:hsl(var(--muted-foreground));font-size:12px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.status{display:inline-block;font:600 11px var(--sans);letter-spacing:.04em;text-transform:uppercase;padding:3px 10px;border-radius:999px}
+.status.running{background:hsl(var(--accent-soft));color:hsl(var(--accent-text))}
+.status.waiting_approval,.status.waiting_human,.status.completed_with_issues{background:hsl(var(--gold)/.12);color:hsl(var(--gold))}
+.status.completed,.status.passed{background:hsl(var(--ok-bg));color:hsl(var(--ok))}
+.status.failed,.status.cancelled{background:hsl(var(--destructive)/.1);color:hsl(var(--destructive))}
+.status.skipped{background:hsl(var(--muted));color:hsl(var(--muted-foreground))}
+.head{display:flex;gap:14px;align-items:flex-start}
+.head .grow{flex:1;min-width:0}
+.head .goal{font:500 15px var(--sans);margin-top:8px;overflow-wrap:anywhere}
+.muted{color:hsl(var(--muted-foreground))}
+.need{border-left:3px solid hsl(var(--gold));background:hsl(var(--gold)/.08)}
+.need .eyebrow{color:hsl(var(--gold))}
+.need b{font-weight:600;overflow-wrap:anywhere}
+.need .btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+@media (max-width:640px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.stat{padding:16px}
+.stat b{display:block;font:600 32px/1 var(--serif);letter-spacing:-.04em}
+.stat span{display:block;margin-top:6px;font-size:12px;color:hsl(var(--muted-foreground))}
+.steps{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column;gap:10px}
+.step{display:flex;gap:12px;align-items:center;color:hsl(var(--muted-foreground))}
+.step .dot{width:28px;height:28px;flex:none;border-radius:50%;border:1.5px solid hsl(var(--border));display:grid;place-items:center;font:600 12px var(--sans)}
+.step.done{color:hsl(var(--foreground))}
+.step.done .dot{background:hsl(var(--foreground));border-color:hsl(var(--foreground));color:hsl(var(--background))}
+.step.done .dot svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.step.cur{color:hsl(var(--foreground));font-weight:600}
+.step.cur .dot{border-color:hsl(var(--accent));color:hsl(var(--accent-text));box-shadow:0 0 0 4px hsl(var(--accent)/.15);animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 7px hsl(var(--accent)/.05)}}
+#tl{max-height:520px;overflow:auto;margin:0 -6px;padding:0 6px}
+.ev{display:grid;grid-template-columns:20px minmax(0,1fr);gap:10px;padding:7px 0;border-bottom:1px dashed hsl(var(--border));font-size:13px;overflow-wrap:anywhere}
+.ev .ic{color:hsl(var(--accent-text));padding-top:2px}
+.ev code{font:12px var(--mono);background:hsl(var(--accent-soft));color:hsl(var(--accent-text));padding:2px 7px;border-radius:6px}
+.ev .m{color:hsl(var(--muted-foreground))}
+.ev.step-h{border-bottom:none;padding-top:16px;font-weight:600}
+.ev.step-h .ic{visibility:hidden}
+.ev.err,.ev.err .ic{color:hsl(var(--destructive))}
+.ev.warn,.ev.warn .ic{color:hsl(var(--gold))}
+.ev.good,.ev.good .ic{color:hsl(var(--ok))}
+table{width:100%;border-collapse:collapse}
+td{padding:10px 8px;border-bottom:1px solid hsl(var(--border));vertical-align:top;font-size:13px}
+td:first-child{width:96px}
+td small{display:block;color:hsl(var(--muted-foreground));font-size:12px;margin-top:2px;overflow-wrap:anywhere}
+.gal{display:flex;gap:12px;flex-wrap:wrap}
+.gal img{width:160px;border-radius:12px;border:1px solid hsl(var(--border));cursor:zoom-in;transition:transform .3s,box-shadow .3s}
+.gal img:hover{transform:translateY(-4px);box-shadow:var(--shadow-lift)}
+#modal{position:fixed;inset:0;z-index:50;background:#000a;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);display:none;align-items:center;justify-content:center;padding:20px}
+#modal img{max-width:96%;max-height:96%;border-radius:12px}
+.empty{text-align:center;padding:36px 20px;color:hsl(var(--muted-foreground))}
+.hint{font-size:12px;color:hsl(var(--muted-foreground));margin:12px 0 0}
+#runs{max-height:360px;overflow:auto;margin:-8px -6px 0;padding:0 6px 6px}
+#rules{padding-left:18px;margin:10px 0 0;font-size:12px;color:hsl(var(--muted-foreground))}
 </style>
 </head>
 <body>
-<header><h1>CentrAlign Operator</h1><span class="badge" id="brain"></span><span class="badge">Goal → Plan → Execute → Observe → Adapt → Verify</span></header>
+<div class="glow a"></div><div class="glow b"></div>
+<nav class="top"><span class="wordmark">CentrAlign</span><span class="pill" id="brain"></span></nav>
+<header class="hero">
+  <span class="pill">Your AI Operator</span>
+  <h1>Give it a goal.<em>It does the work and proves it.</em></h1>
+  <p>Describe the outcome you want. The operator plans it, works across your tools, asks when it should, and checks the result against the real systems.</p>
+</header>
 <div class="layout">
   <aside>
-    <div class="card">
-      <h2>New task</h2>
+    <section class="card c-new">
+      <div class="eyebrow">New task</div>
       <textarea id="goal" placeholder="Describe the outcome you want, e.g. Onboard Priya Sharma into Engineering, starting Monday"></textarea>
-      <div class="row"><button class="primary" id="go">Run</button></div>
+      <div class="row"><button class="btn primary" id="go">Run</button></div>
       <div class="row" id="examples"></div>
-    </div>
-    <div class="card"><h2>Runs</h2><div id="runs"></div></div>
-    <div class="card">
-      <h2>Demo environment</h2>
-      <div class="row" id="chaos"></div>
-      <div class="row"><button id="reset">Reset company data</button></div>
-      <p class="m" style="color:var(--mute);font-size:12px;margin:8px 0 0">Injects failures into the mock HR app so you can watch recovery.</p>
-    </div>
-    <div class="card">
-      <h2>Teach the operator</h2>
+    </section>
+    <section class="card c-rest"><div class="eyebrow">Runs</div><div id="runs"></div></section>
+    <section class="card c-rest">
+      <div class="eyebrow">Demo environment</div>
+      <div class="row" id="chaos" style="margin-top:0"></div>
+      <div class="row"><button class="btn secondary sm" id="reset">Reset company data</button></div>
+      <p class="hint">Pick failures to inject into the mock HR app, then reset. Watch how the operator copes.</p>
+    </section>
+    <section class="card c-rest">
+      <div class="eyebrow">Teach the operator</div>
       <input type="text" id="rule" placeholder="A standing rule, e.g. Always cc the manager">
-      <div class="row"><button id="addrule">Save rule</button></div>
-      <ul id="rules" style="padding-left:18px;margin:8px 0 0;color:var(--mute);font-size:12px"></ul>
-    </div>
+      <div class="row"><button class="btn secondary sm" id="addrule">Save rule</button></div>
+      <ul id="rules"></ul>
+    </section>
   </aside>
   <main id="main"><div class="card empty">Start a task, or pick a run.</div></main>
 </div>
-<div id="modal" onclick="this.style.display='none'"><img id="modalimg"></div>
+<div id="modal" onclick="this.style.display='none'"><img id="modalimg" alt="Evidence screenshot"></div>
 <script>
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const api=(p,o)=>fetch(p,o&&{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(o)}).then(r=>r.ok?r.json():r.json().then(e=>{throw new Error(e.detail||r.status)}));
 let cur=null,after=0,evs=[],state=null,chaos=new Set();
+
+// Small line icons in one accent style (16px, currentColor).
+const P={
+ play:'<path d="M7 5l11 7-11 7z"/>',brain:'<path d="M9 4a3 3 0 0 0-3 3 3 3 0 0 0-2 5 3 3 0 0 0 2 5 3 3 0 0 0 6 1V4a3 3 0 0 0-3 0zM15 4a3 3 0 0 1 3 3 3 3 0 0 1 2 5 3 3 0 0 1-2 5 3 3 0 0 1-6 1"/>',
+ map:'<path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2zM9 4v14M15 6v14"/>',redo:'<path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/>',
+ shield:'<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>',check:'<path d="M5 12l5 5 9-10"/>',x:'<path d="M6 6l12 12M18 6L6 18"/>',
+ alert:'<path d="M12 4l9 16H3zM12 10v4M12 17v.5"/>',hand:'<path d="M8 12V6a1.5 1.5 0 0 1 3 0v5m0-6a1.5 1.5 0 0 1 3 0v6m0-4a1.5 1.5 0 0 1 3 0v7a6 6 0 0 1-6 6h-1a6 6 0 0 1-5-3l-2-4a1.5 1.5 0 0 1 3-1l1 2"/>',
+ up:'<path d="M7 11v8H4v-8zM7 11l4-7a2 2 0 0 1 2 2v4h5a2 2 0 0 1 2 2l-1 6a2 2 0 0 1-2 2H7"/>',down:'<path d="M17 13V5h3v8zM17 13l-4 7a2 2 0 0 1-2-2v-4H6a2 2 0 0 1-2-2l1-6a2 2 0 0 1 2-2h10"/>',
+ search:'<circle cx="11" cy="11" r="6"/><path d="M20 20l-4-4"/>',bulb:'<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10c1 1 1 2 1 3h6c0-1 0-2 1-3a6 6 0 0 0-4-10z"/>',
+ flag:'<path d="M5 21V4M5 4h12l-2 4 2 4H5"/>',lock:'<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+ act:'<path d="M5 12h14M13 6l6 6-6 6"/>',list:'<path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/>',
+ plan:'<path d="M9 4h6M9 2h6v4H9zM6 5H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-1M8 12h8M8 16h5"/>',
+ image:'<rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="M20 16l-5-5-8 8"/>',
+ table:'<rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 10h16M10 5v14"/>'
+};
+const svg=n=>`<svg viewBox="0 0 24 24" aria-hidden="true">${P[n]||P.act}</svg>`;
+const tile=n=>`<span class="tile">${svg(n)}</span>`;
+const eyebrow=(label,extra='')=>`<div class="eyebrow">${label}${extra?`<small>${extra}</small>`:''}</div>`;
+
 const EXAMPLES=['Onboard Priya Sharma into Engineering, starting 2026-11-02','Onboard Rahul Verma into Sales, starting 2026-11-02','Onboard Dana Kim into Engineering with admin access, starting 2026-11-02','Offboard Sam Okafor','Onboard Dana Lee'];
-$('#examples').innerHTML=EXAMPLES.map((e,i)=>`<span class="chip" data-i="${i}">${esc(e.length>34?e.slice(0,32)+'…':e)}</span>`).join('');
+$('#examples').innerHTML=EXAMPLES.map((e,i)=>`<button class="chip" data-i="${i}">${esc(e.length>34?e.slice(0,32)+'…':e)}</button>`).join('');
 $('#examples').onclick=e=>{const i=e.target.dataset.i;if(i!=null)$('#goal').value=EXAMPLES[i]};
-['flaky','rename','expiry','slow'].forEach(c=>{const b=document.createElement('span');b.className='chip';b.textContent=c;b.onclick=()=>{chaos.has(c)?chaos.delete(c):chaos.add(c);b.style.cssText=chaos.has(c)?'background:var(--warnbg);color:var(--warn)':''};$('#chaos').append(b)});
-$('#reset').onclick=async()=>{await api('/api/demo/reset',{chaos:[...chaos].join(',')});$('#reset').textContent='Reset ✓';setTimeout(()=>$('#reset').textContent='Reset company data',1200)};
+['flaky','rename','expiry','slow','relabel'].forEach(c=>{const b=document.createElement('button');b.className='chip';b.textContent=c;b.onclick=()=>{chaos.has(c)?chaos.delete(c):chaos.add(c);b.classList.toggle('on',chaos.has(c))};$('#chaos').append(b)});
+$('#reset').onclick=async()=>{await api('/api/demo/reset',{chaos:[...chaos].join(',')});$('#reset').textContent='Reset done';setTimeout(()=>$('#reset').textContent='Reset company data',1200)};
 $('#go').onclick=async()=>{const g=$('#goal').value.trim();if(!g)return;const r=await api('/api/runs',{goal:g});select(r.run_id);loadRuns()};
 $('#addrule').onclick=async()=>{const t=$('#rule').value.trim();if(!t)return;await api('/api/feedback',{text:t});$('#rule').value='';info()};
 async function info(){const i=await api('/api/info');$('#brain').textContent='brain: '+i.brain+(i.model?' · '+i.model:'');$('#rules').innerHTML=i.feedback.slice(0,6).map(f=>`<li>${esc(f)}</li>`).join('')}
-async function loadRuns(){const rs=await api('/api/runs');$('#runs').innerHTML=rs.map(r=>`<div class="run ${r.id===cur?'sel':''}" data-id="${r.id}"><span class="pill ${r.status}">${r.status.replace(/_/g,' ')}</span><small>${esc(r.goal.slice(0,70))}</small></div>`).join('')||'<div class="empty">No runs yet</div>'}
+async function loadRuns(){const rs=await api('/api/runs');$('#runs').innerHTML=rs.map(r=>`<button class="run ${r.id===cur?'sel':''}" data-id="${r.id}"><span class="status ${r.status}">${r.status.replace(/_/g,' ')}</span><small>${esc(r.goal)}</small></button>`).join('')||'<div class="empty">No runs yet.</div>'}
 $('#runs').onclick=e=>{const d=e.target.closest('.run');if(d)select(d.dataset.id)};
-function select(id){cur=id;after=0;evs=[];state=null;$('#main').innerHTML='<div class="card empty">Loading…</div>';tick()}
+function select(id){cur=id;after=0;evs=[];state=null;$('#main').innerHTML='<div class="card empty">Loading…</div>';tick();loadRuns()}
+
 function line(e){const d=e.data,t=e.type;
  switch(t){
- case'run.created':return['▶',`Task received <span class="m">(brain: ${esc(d.brain)})</span>`];
- case'memory.recalled':return['🧠',`Recalled company knowledge: ${esc(d.docs.join(', ')||'none')}${d.rules.length?`; ${d.rules.length} learned rule(s)`:''}`];
- case'plan.created':case'plan.revised':return['🗺',`${t==='plan.created'?'Plan':'Revised plan'}: ${esc(d.plan.understanding)}`];
- case'plan.replanning':return['↻',`<span class="warn">Replanning: ${esc(d.reason.slice(0,160))}</span>`,'warn'];
- case'step.started':return['',`${d.index}/${d.of} · ${esc(d.description)}`,'step'];
- case'policy.decision':return d.verdict==='auto'?null:['🛡',`Policy <b>${d.verdict.toUpperCase()}</b> (${esc(d.rule)}): ${esc(d.preview||'')}`,d.verdict==='deny'?'err':'warn'];
+ case'run.created':return['play',`Task received <span class="m">(brain: ${esc(d.brain)})</span>`];
+ case'memory.recalled':return['brain',`Recalled company knowledge: ${esc(d.docs.join(', ')||'none')}${d.rules.length?`; ${d.rules.length} learned rule(s)`:''}`];
+ case'plan.created':case'plan.revised':return['map',`${t==='plan.created'?'Plan':'Revised plan'}: ${esc(d.plan.understanding)}`];
+ case'checks.frozen':return['lock',`Acceptance criteria locked: ${d.total} checks${d.independent.length?`, ${d.independent.length} written independently of the plan`:''}`];
+ case'plan.replanning':return['redo',`Replanning: ${esc(d.reason.slice(0,160))}`,'warn'];
+ case'step.started':return['act',`${d.index}/${d.of} · ${esc(d.description)}`,'step-h'];
+ case'policy.decision':return d.verdict==='auto'?null:['shield',`Policy <b>${d.verdict.toUpperCase()}</b> (${esc(d.rule)}): ${esc(d.preview||'')}`,d.verdict==='deny'?'err':'warn'];
+ case'action.blocked':return['shield',`Held before sending: <code>${esc(d.request.slice(0,90))}</code> needs ${d.verdict==='approve'?'approval':'a different approach'} (${esc(d.rule)})`,'warn'];
  case'action.executed':{const a=Object.entries(d.args).filter(([k])=>!['content','body'].includes(k)).map(([k,v])=>`${k}=${esc((typeof v==='object'?JSON.stringify(v):String(v)).slice(0,40))}`).join(' ');
-  return[d.ok?'✓':'✗',`<code>${esc(d.tool)}</code> <span class="m">${a}</span> ${d.retries?`<span class="warn">(retried ${d.retries}×)</span>`:''} <span class="m">${esc((d.error||d.summary||'').slice(0,70))}</span>`,d.ok?'':'err']}
- case'anomaly':return['⚠',`Observed: ${esc(d.note)}`,'warn'];
- case'step.completed':return['✔',`${esc(d.summary)}${d.skipped?' <span class="warn">(skipped)</span>':''}`,'good'];
- case'step.failed':return['✖',`Step failed: ${esc(d.reason)}`,'err'];
- case'intervention.requested':return['✋',`Needs a human: ${esc(d.question||d.preview)}`,'warn'];
- case'approval.granted':return['👍',`Approved: ${esc(d.preview)}`,'good'];
- case'approval.denied':return['👎',`Declined: ${esc(d.preview)} ${esc(d.note||'')}`,'err'];
- case'verify.started':return['🔎',`Verifying ${d.checks} acceptance checks independently`,'step'];
- case'check.result':return[d.status==='passed'?'✔':d.status==='skipped'?'–':'✖',`${esc(d.description)} <span class="m">${esc(d.detail.slice(0,90))}</span>`,d.status==='passed'?'good':d.status==='skipped'?'warn':'err'];
- case'lesson.saved':return['💡',`Learned: ${esc(d.lesson)}`];
- case'run.finished':return['■',`<b>${esc(d.status.replace(/_/g,' '))}</b>: ${esc(d.summary)}`,d.status==='completed'?'good':'err'];
- case'run.error':return['✖',esc(d.error),'err'];
+  return[d.ok?'check':'x',`<code>${esc(d.tool)}</code> <span class="m">${a}</span> ${d.retries?`<span style="color:hsl(var(--gold))">(retried ${d.retries}×)</span>`:''} <span class="m">${esc((d.error||d.summary||'').slice(0,70))}</span>`,d.ok?'':'err']}
+ case'anomaly':return['alert',`Observed: ${esc(d.note)}`,'warn'];
+ case'step.completed':return['check',`${esc(d.summary)}${d.skipped?' (skipped)':''}`,'good'];
+ case'step.failed':return['x',`Step failed: ${esc(d.reason)}`,'err'];
+ case'intervention.requested':return['hand',`Needs a person: ${esc(d.question||d.preview)}`,'warn'];
+ case'approval.granted':return['up',`Approved: ${esc(d.preview)}`,'good'];
+ case'approval.denied':return['down',`Declined: ${esc(d.preview)} ${esc(d.note||'')}`,'err'];
+ case'verify.started':return['search',`Checking ${d.checks} acceptance criteria against the real systems`,'step-h'];
+ case'check.result':return[d.status==='passed'?'check':d.status==='skipped'?'redo':'x',`${esc(d.description)} <span class="m">${esc(d.detail.slice(0,90))}</span>`,d.status==='passed'?'good':d.status==='skipped'?'warn':'err'];
+ case'lesson.saved':return['bulb',`Learned: ${esc(d.lesson)}`];
+ case'run.recovered':return['redo',`Picked up again after a worker stopped`,'warn'];
+ case'lease.lost':return['lock',`Another worker took over this run`,'warn'];
+ case'run.finished':return['flag',`<b>${esc(d.status.replace(/_/g,' '))}</b>: ${esc(d.summary)}`,d.status==='completed'?'good':'err'];
+ case'run.error':return['x',esc(d.error),'err'];
  }return null}
-function render(){const s=state;if(!s)return;const evHtml=evs.map(e=>{const l=line(e);return l?`<div class="ev ${l[2]||''}"><span>${l[0]}</span><span>${l[1]}</span></div>`:''}).join('');
+
+function render(){const s=state;if(!s)return;
+ const tl=$('#tl');const stick=!tl||tl.scrollHeight-tl.scrollTop-tl.clientHeight<40,keep=tl?tl.scrollTop:0;
+ const evHtml=evs.map(e=>{const l=line(e);return l?`<div class="ev ${l[2]||''}"><span class="ic">${svg(l[0])}</span><span>${l[1]}</span></div>`:''}).join('');
+ const running=['running','waiting_approval','waiting_human'].includes(s.status);
  const pend=s.pending.map(p=>p.kind==='approval'?
-  `<div class="card need"><h2>Approval needed</h2><b>${esc(p.payload.preview)}</b><p class="m" style="margin:4px 0">${esc(p.payload.reason)} <i>(rule: ${esc(p.payload.rule)})</i></p>
-   <input type="text" id="note${p.id}" placeholder="Optional note. If you decline, this becomes a standing rule."><div class="row"><button class="ok" onclick="decide(${p.id},true)">Approve</button><button class="bad" onclick="decide(${p.id},false)">Decline</button></div></div>`:
-  `<div class="card need"><h2>Question for you</h2><b>${esc(p.payload.question)}</b><div class="row" style="flex-wrap:nowrap"><input type="text" id="ans${p.id}" placeholder="Your answer"><button class="primary" onclick="answer(${p.id})">Send</button></div></div>`).join('');
- const plan=s.plan?`<div class="card"><h2>Plan</h2><p style="margin:0 0 8px">${esc(s.plan.understanding)}</p><ul class="steps">${s.plan.steps.map((st,i)=>`<li class="${i<s.step_idx||s.phase==='verifying'||s.phase==='finished'&&s.status==='completed'?'done':i===s.step_idx&&s.phase==='executing'?'cur':''}"><span>${i<s.step_idx||s.phase==='verifying'||s.phase==='finished'&&s.status==='completed'?'✔':i+1}</span>${esc(st.description)}</li>`).join('')}</ul>${s.plan.assumptions.length?`<p class="m" style="color:var(--mute);margin:8px 0 0;font-size:12px">Assumptions: ${s.plan.assumptions.map(esc).join(' · ')}</p>`:''}</div>`:'';
- const checks=s.checks.length?`<div class="card"><h2>Acceptance checks <span style="text-transform:none;letter-spacing:0">(verified independently of the agent)</span></h2><table>${s.checks.map(c=>`<tr><td><span class="pill ${c.status==='passed'?'completed':c.status==='skipped'?'waiting_human':'failed'}">${c.status}</span></td><td>${esc(c.description)}<br><span style="color:var(--mute);font-size:12px">${esc(c.detail)}</span></td></tr>`).join('')}</table></div>`:'';
+  `<section class="card need"><div class="eyebrow">Approval needed</div><b>${esc(p.payload.preview)}</b><p class="muted" style="margin:6px 0 12px">${esc(p.payload.reason)} <i>(rule: ${esc(p.payload.rule)})</i></p>
+   <input type="text" id="note${p.id}" placeholder="Optional note. If you decline, it becomes a standing rule."><div class="btns"><button class="btn primary sm" onclick="decide(${p.id},true)">Approve</button><button class="btn danger sm" onclick="decide(${p.id},false)">Decline</button></div></section>`:
+  `<section class="card need"><div class="eyebrow">A question for you</div><b>${esc(p.payload.question)}</b><div class="btns" style="flex-wrap:nowrap"><input type="text" id="ans${p.id}" placeholder="Your answer"><button class="btn primary sm" onclick="answer(${p.id})">Send</button></div></section>`).join('');
+ const done=i=>i<s.step_idx||s.phase==='verifying'||(s.phase==='finished'&&s.status==='completed');
+ const plan=s.plan&&s.plan.steps.length?`<section class="card"><div class="head">${tile('plan')}<div class="grow">${eyebrow('Plan')}<p style="margin:-4px 0 0">${esc(s.plan.understanding)}</p></div></div><ul class="steps">${s.plan.steps.map((st,i)=>`<li class="step ${done(i)?'done':i===s.step_idx&&s.phase==='executing'?'cur':''}"><span class="dot">${done(i)?svg('check'):i+1}</span><span>${esc(st.description)}</span></li>`).join('')}</ul>${s.plan.assumptions.length?`<p class="hint">Assumptions: ${s.plan.assumptions.map(esc).join(' · ')}</p>`:''}</section>`:'';
+ const n=t=>evs.filter(e=>e.type===t).length;
+ const recovered=n('anomaly')+n('plan.replanning')+evs.filter(e=>e.type==='action.executed'&&e.data.retries).length;
+ const passed=s.checks.filter(c=>c.status==='passed').length;
+ const stats=evs.length?`<div class="stats"><div class="card stat"><b>${n('action.executed')}</b><span>Actions taken</span></div><div class="card stat"><b>${recovered}</b><span>Recovered automatically</span></div><div class="card stat"><b>${n('approval.granted')+n('approval.denied')}</b><span>Human approvals</span></div><div class="card stat"><b>${s.checks.length?passed+'/'+s.checks.length:'–'}</b><span>Checks passed</span></div></div>`:'';
+ const checks=s.checks.length?`<section class="card"><div class="head">${tile('table')}<div class="grow">${eyebrow('Acceptance checks','verified independently of the agent')}</div></div><table>${s.checks.map(c=>`<tr><td><span class="status ${c.status}">${c.status}</span></td><td>${esc(c.description)}<small>${esc(c.detail)}</small></td></tr>`).join('')}</table></section>`:'';
  const shots=evs.filter(e=>e.type==='action.executed').flatMap(e=>e.data.artifacts||[]);
- const gal=shots.length?`<div class="card"><h2>Evidence (${shots.length} screenshots)</h2><div class="gal">${shots.map(p=>`<img loading="lazy" src="/api/runs/${cur}/evidence/${p}" onclick="zoom(this.src)">`).join('')}</div></div>`:'';
- const keep=$('#tl')?$('#tl').scrollTop:0;
- $('#main').innerHTML=`<div class="card"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="pill ${s.status}">${s.status.replace(/_/g,' ')}</span><b>${esc(s.goal)}</b>${['running','waiting_approval','waiting_human'].includes(s.status)?`<button class="bad" style="margin-left:auto" onclick="api('/api/runs/${cur}/cancel',{})">Cancel</button>`:''}</div>${s.summary?`<p style="margin:8px 0 0">${esc(s.summary)}</p>`:''}${s.status!=='running'&&s.phase==='finished'?`<p style="margin:6px 0 0;font-size:12px;color:var(--mute)">Full evidence report: <code>.centralign/runs/${cur}/report.md</code></p>`:''}</div>${pend}${plan}<div class="card"><h2>Live trace</h2><div id="tl">${evHtml}</div></div>${checks}${gal}`;
+ const gal=shots.length?`<section class="card"><div class="head">${tile('image')}<div class="grow">${eyebrow('Evidence',shots.length+' screenshots')}</div></div><div class="gal">${shots.map(p=>`<img loading="lazy" alt="Screenshot of the step" src="/api/runs/${cur}/evidence/${p}" onclick="zoom(this.src)">`).join('')}</div></section>`:'';
+ $('#main').innerHTML=`<section class="card"><div class="head"><div class="grow"><span class="status ${s.status}">${s.status.replace(/_/g,' ')}</span><div class="goal">${esc(s.goal)}</div>${s.summary?`<p class="muted" style="margin:8px 0 0">${esc(s.summary)}</p>`:''}${s.phase==='finished'?`<p class="hint">Full evidence report: <code style="font:12px var(--mono)">.centralign/runs/${cur}/report.md</code></p>`:''}</div>${running?`<button class="btn danger sm" onclick="api('/api/runs/${cur}/cancel',{})">Cancel</button>`:''}</div></section>${pend}${stats}${plan}<section class="card"><div class="head">${tile('list')}<div class="grow">${eyebrow('Live trace')}</div></div><div id="tl">${evHtml}</div></section>${checks}${gal}`;
+ const t2=$('#tl');if(t2)t2.scrollTop=stick?t2.scrollHeight:keep;
 }
 window.decide=async(id,ok)=>{await api('/api/interventions/'+id,{approved:ok,note:($('#note'+id)||{}).value||''});tick()};
 window.answer=async id=>{const v=$('#ans'+id).value.trim();if(!v)return;await api('/api/interventions/'+id,{answer:v});tick()};
